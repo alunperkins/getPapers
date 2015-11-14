@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # TO DO
-# DUH the year is not a unique identifier, so doesn't work in addFileField and addAbstractField
-# when exluding files from the "select", checking for a " - year - " excludes the files taken from the Mendeley folder
+# for non-arxiv papers fetch the abstracts from inSPIRE instead
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
