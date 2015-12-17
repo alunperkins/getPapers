@@ -1,7 +1,10 @@
 #!/bin/bash
 
+readonly MANUALDOWNLOADSFOLDER=manuallyDownloadedPdfs
+
 # TO DO
 # for non-arxiv papers fetch the abstracts from inSPIRE instead
+# fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
@@ -77,6 +80,15 @@ main(){
 		echo "provide the name of the .bib file"
 		exit 1
 	fi
+
+	echo "this program generally only uses the arxiv, but for non-arxiv papers it can still manage file/names and add info to the bibtex."
+	echo "it will look for non-arxiv papers that have been downloaded manually in the folder $MANUALDOWNLOADSFOLDER"
+	if [[ ! -d $MANUALDOWNLOADSFOLDER ]]
+	then
+		echo "create the $MANUALDOWNLOADSFOLDER?"
+		getYN && mkdir $MANUALDOWNLOADSFOLDER
+	fi
+	echo "" # a blank line 
 	
 	BIBFILE=$1 # global variable
 	echo "reading $BIBFILE"
@@ -158,12 +170,12 @@ main(){
 			then # then ask the user to point out the pdf
 				echo "PDF: ABSENT OR WRONGLY NAMED"
 				echo -e "\nThis paper is not on the arxiv. \nPlease browse its information and select a file from the PWD \n\npaper's bibtex entry : \n\n$paper\n"
-				# ask the user to identify this paper from among the files from the pwd
+				# ask the user to identify this paper from among the files from the manual downloads folder
 				echo "if this paper is present please select it from this list, by typing the number. Cancel this menu by entering '1' or using CTRL-D"
 				echo ""
 				slightly_old_IFS=$IFS	# save the field separator           
 				IFS=$'\n'	# new field separator
-				select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 | grep -v $BIBFILE )")
+				select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 $MANUALDOWNLOADSFOLDER | grep -v $BIBFILE )")
 				do
 					if [[ "$fileContainingPaper" =~ "CANCEL THIS MENU" ]]; then break; fi
 					if [[ ! -f "$fileContainingPaper" ]]; then echo -e "\ninvalid choice\n"; break; fi	
