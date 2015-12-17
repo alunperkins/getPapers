@@ -98,7 +98,7 @@ main(){
 		local paperAuthorsSurnames="$(echo $paper | grep -o 'author = "[^"]*'  | sed 's/author = "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
 		local paperYear="$(echo $paper | grep -o 'year = "[^"]*'  | sed 's/year = "//')"
 		local paperTitle="$(echo $paper | grep -o 'title = "[^"]*'  | sed 's/title = "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
-		local paperTitleSanitised=$(tr -d '={}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
+		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
 		local paperUID="$(sed -n -e 's/article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
 		if [[ -z "$paperAuthorsSurnames" ]]; then echo "couldn't read author's names - please check the bib file"; continue; fi
