@@ -16,7 +16,7 @@ addFileField(){ # edits the bib file
 	local paperUID="$2"
 	local paperFilename="$3"
 	# check if there is a "file" field already
-	echo $paper| grep 'file = ' >/dev/null
+	echo $paper| grep 'file\s*= ' >/dev/null
 	local paperFileFieldPresent=$?
 	if [[ $paperFileFieldPresent -ne true ]]
 	then
@@ -33,7 +33,7 @@ addAbstractField(){ # edits the bib file
 	local paperAbstract="$3"
 	local paperAbstractSanitised=$(printf '%s\n' "$paperAbstract" | tr -d '@"' | sed 's/[\&/]/\\&/g') # delete @ and " and escape the special characters \&/ (e.g. from LaTeX) suitably to appear in RHS of a sed command
 	# check if there is an "abstract" field already
-	echo $paper| grep 'abstract = ' >/dev/null
+	echo $paper| grep 'abstract\s*= ' >/dev/null
 	local paperAbstractFieldPresent=$?
 	if [[ $paperAbstractFieldPresent -ne true ]]
 	then
@@ -107,10 +107,10 @@ main(){
 		
 		# STEP 2 : read the data into variables
 		# regex in next line is: grep for author field | but delete the author tag itself | find surnames = nonblank characters before a comma | deal with {t'Hooft} | remove newlines
-		local paperAuthorsSurnames="$(echo $paper | grep -o 'author = "[^"]*'  | sed 's/author = "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
-		local paperYear="$(echo $paper | grep -o 'year = "[^"]*'  | sed 's/year = "//')"
-		local paperTitle="$(echo $paper | grep -o 'title = "[^"]*'  | sed 's/title = "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
-		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
+		local paperAuthorsSurnames="$(echo $paper | grep -o 'author\s*= "[^"]*'  | sed 's/author\s*= "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
+		local paperYear="$(echo $paper | grep -o 'year\s*= "[^"]*'  | sed 's/year\s*= "//')"
+		local paperTitle="$(echo $paper | grep -o 'title\s*= "[^"]*'  | sed 's/title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
+		local paperTitleSanitised=$(tr -d '={}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
 		local paperUID="$(sed -n -e 's/article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
 		if [[ -z "$paperAuthorsSurnames" ]]; then echo "couldn't read author's names - please check the bib file"; continue; fi
@@ -128,8 +128,8 @@ main(){
 		local onArxiv=$?
 		if [[ $onArxiv -eq true ]]
 		then
-			echo on arxiv
-			local paperEprintNo="$(echo $paper | grep -o 'eprint = "[^"]*'  | sed 's/eprint = "//')" # possible formats include 1501.0006, 1106.4657, hep-th/0206219
+			echo "on arxiv"
+			local paperEprintNo="$(echo $paper | grep -o 'eprint\s*= "[^"]*'  | sed 's/eprint\s*= "//')" # possible formats include 1501.0006, 1106.4657, hep-th/0206219
 			
 			# STEP 4: get the webpage / make sure we have it already
 			
@@ -163,12 +163,14 @@ main(){
 			fi
 
 		else
+			echo "not on arxiv"
 			# if it is not available on the arXiv then:
 			# NOT APPLICABLE (STEP 4: get the webpage / make sure we have it already) - could retrieve the abstract from the inspire page instead?
 			# STEP 5: find the pdf
 			if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
 			then # then ask the user to point out the pdf
 				echo "PDF: ABSENT OR WRONGLY NAMED"
+				if [[ ! -d $MANUALDOWNLOADSFOLDER ]]; then continue; fi
 				echo -e "\nThis paper is not on the arxiv. \nPlease browse its information and select a file from the PWD \n\npaper's bibtex entry : \n\n$paper\n"
 				# ask the user to identify this paper from among the files from the manual downloads folder
 				echo "if this paper is present please select it from this list, by typing the number. Cancel this menu by entering '1' or using CTRL-D"
