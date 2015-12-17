@@ -110,7 +110,7 @@ main(){
 		local paperAuthorsSurnames="$(echo $paper | grep -o 'author\s*= "[^"]*'  | sed 's/author\s*= "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
 		local paperYear="$(echo $paper | grep -o 'year\s*= "[^"]*'  | sed 's/year\s*= "//')"
 		local paperTitle="$(echo $paper | grep -o 'title\s*= "[^"]*'  | sed 's/title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
-		local paperTitleSanitised=$(tr -d '={}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
+		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
 		local paperUID="$(sed -n -e 's/article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
 		if [[ -z "$paperAuthorsSurnames" ]]; then echo "couldn't read author's names - please check the bib file"; continue; fi
@@ -170,14 +170,14 @@ main(){
 			if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
 			then # then ask the user to point out the pdf
 				echo "PDF: ABSENT OR WRONGLY NAMED"
-				if [[ ! -d $MANUALDOWNLOADSFOLDER ]]; then continue; fi
+				if [[ ! -d $MANUALDOWNLOADSFOLDER ]]; then echo "could not find the folder for manually downloaded pdfs"; continue; fi
 				echo -e "\nThis paper is not on the arxiv. \nPlease browse its information and select a file from the PWD \n\npaper's bibtex entry : \n\n$paper\n"
 				# ask the user to identify this paper from among the files from the manual downloads folder
-				echo "if this paper is present please select it from this list, by typing the number. Cancel this menu by entering '1' or using CTRL-D"
+				echo "if this paper is present please select it from within $MANUALDOWNLOADSFOLDER, by typing the number. Cancel this menu by entering '1' or using CTRL-D"
 				echo ""
 				slightly_old_IFS=$IFS	# save the field separator           
 				IFS=$'\n'	# new field separator
-				select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 $MANUALDOWNLOADSFOLDER | grep -v $BIBFILE )")
+				select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 $MANUALDOWNLOADSFOLDER/* | grep -v $BIBFILE )")
 				do
 					if [[ "$fileContainingPaper" =~ "CANCEL THIS MENU" ]]; then break; fi
 					if [[ ! -f "$fileContainingPaper" ]]; then echo -e "\ninvalid choice\n"; break; fi	
