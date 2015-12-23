@@ -80,6 +80,11 @@ main(){
 		echo "provide the name of the .bib file"
 		exit 1
 	fi
+	BIBFILE=$1 # global variable
+	echo "reading $BIBFILE"
+	
+	echo "FYI a tally chart of fields appearing in the .bib file"
+	grep -o '^[^=]* =' $BIBFILE | grep '\S.*' | sort | uniq --count # | sort --numeric-sort
 
 	echo "this program generally only uses the arxiv, but for non-arxiv papers it can still manage file/names and add info to the bibtex."
 	echo "it will look for non-arxiv papers that have been downloaded manually in the folder $MANUALDOWNLOADSFOLDER"
@@ -89,12 +94,6 @@ main(){
 		getYN && mkdir $MANUALDOWNLOADSFOLDER
 	fi
 	echo "" # a blank line 
-	
-	BIBFILE=$1 # global variable
-	echo "reading $BIBFILE"
-	
-	echo "FYI a tally chart of fields appearing"
-	grep -o '^[^=]* =' $BIBFILE | sort | uniq --count | sort --numeric-sort
 	
 	old_IFS=$IFS	# save the field separator           
 	IFS=@	# the field separator used in bib
