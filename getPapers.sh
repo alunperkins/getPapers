@@ -123,7 +123,7 @@ main(){
 		# for the filenames take:
 		#  the surnames of the authors - if too long then replace the later authors with "et Al."
 		#  the year published
-		#  the paper's title - if too long then limit, making sure it doesn't then end with a space
+		#  the paper's title - if too long then cut off the end, but then remove trailing spaces
 		local paperTitleSanitisedLengthLimited=${paperTitleSanitised:0:$TITLELENGTHLIMIT}
 		if [[ ${#paperAuthorsSurnames} -gt $AUTHORNAMESLENGTHLIMIT ]]
 		then local paperAuthorsSurnamesLengthLimited=$(grep -o '^.*,'<<<${paperAuthorsSurnames:0:$AUTHORNAMESLENGTHLIMIT})etAl
