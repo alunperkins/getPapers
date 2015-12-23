@@ -1,6 +1,8 @@
 #!/bin/bash
 
 readonly MANUALDOWNLOADSFOLDER=manuallyDownloadedPdfs
+readonly TITLELENGTHLIMIT=100 # to limit the number of characters in a paper's title as it appears in the paper's filename
+readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the authors' names as they appear in the paper's filename
 
 # TO DO
 # for non-arxiv papers fetch the abstracts from inSPIRE instead
@@ -117,8 +119,17 @@ main(){
 		if [[ -z "$paperTitle" ]]; then echo "couldn't read paper title - please check the bib file"; continue; fi
 		if [[ -z "$paperTitleSanitised" ]]; then echo "paper title couldn't be used - please check the bib file"; continue; fi
 		if [[ -z "$paperUID" ]]; then echo "couldn't read paper's UID - please check the bib file"; continue; fi
-				
-		paperFilenameSuggestion="${paperAuthorsSurnames%,} - $paperYear - $paperTitleSanitised.pdf" # = (paperAuthorsSurnames *without the trailing comma!*) - year - title.pdf
+		
+		# for the filenames take:
+		#  the surnames of the authors - if too long then replace the later authors with "et Al."
+		#  the year published
+		#  the paper's title - if too long then limit, making sure it doesn't then end with a space
+		local paperTitleSanitisedLengthLimited=${paperTitleSanitised:0:$TITLELENGTHLIMIT}
+		if [[ ${#paperAuthorsSurnames} -gt $AUTHORNAMESLENGTHLIMIT ]]
+		then local paperAuthorsSurnamesLengthLimited=$(grep -o '^.*,'<<<${paperAuthorsSurnames:0:$AUTHORNAMESLENGTHLIMIT})etAl
+		else local paperAuthorsSurnamesLengthLimited=$paperAuthorsSurnames
+		fi
+		paperFilenameSuggestion="${paperAuthorsSurnamesLengthLimited%,} - $paperYear - ${paperTitleSanitisedLengthLimited% }.pdf" 
 		echo "target filename : $paperFilenameSuggestion"
 		
 		# STEP 3: branch for arxiv/non-arxiv
