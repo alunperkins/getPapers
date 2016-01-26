@@ -9,6 +9,7 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
 # add feature to take a list of inSPIRE URLs as argument and automatically retrieve the bibtex, and add it to the .bib file - perhaps this functionality would be a separate script?
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
+# add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
