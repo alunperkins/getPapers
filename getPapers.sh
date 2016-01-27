@@ -10,6 +10,7 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # add feature to take a list of inSPIRE URLs as argument and automatically retrieve the bibtex, and add it to the .bib file - perhaps this functionality would be a separate script?
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
+# look up what the other bibtex types are (aside from articles) and allow all ones with the same fields/arxiv stuff, etc. The program didn't deal with an "inproceedings" when I asked it to, even though enough of the fields were the same that it could have dealt with it fine.
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
@@ -107,7 +108,7 @@ main(){
 		# STEP 1 : check if the item is suitable
 		echo "---------------------------------------"
 		echo "bib item: ${paper:0:7}" # the first seven characters of the bib entry
-		if [[ ! "$paper" =~ ^article ]]; then continue; fi # skip if not an article
+		if [[ ! "$paper" =~ ^article ]]; then echo "not an article - skipping..."; continue; fi # skip if not an article
 		
 		# STEP 2 : read the data into variables
 		# regex in next line is: grep for author field | but delete the author tag itself | find surnames = nonblank characters before a comma | deal with {t'Hooft} | remove newlines
