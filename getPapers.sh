@@ -11,6 +11,7 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
 # look up what the other bibtex types are (aside from articles) and allow all ones with the same fields/arxiv stuff, etc. The program didn't deal with an "inproceedings" when I asked it to, even though enough of the fields were the same that it could have dealt with it fine.
+# change the behaviour of arxiv pages so that it gets the link to the pdf without saving the page.
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
@@ -80,39 +81,25 @@ getArxivPdf(){ # wget the pdf
 	return $?
 }
 
-#getInspirePage(){ # wget the inspire webpage
-	#local inspireURL="$1"
-	#local inspireSavedPageDestination="$2"
-#	
-	## return 0 # FOR TESTING
-#	
-	#echo "download inSPIRE webpage?"
-	#getYN && (
-		#echo
-		#echo "---wget---"
-		#wget -U firefox "$inspireURL" --output-document=$paperSavedPageDestination
-		#echo "---/wget---"
-		#echo
-	#)
-	#return $?
-#}
+isUrlIsAnInspireUrl(){
+	local url="$1"
+	if [[ ! ( "$url" =~ http://inspirehep.net/record/* ) ]]
+	then 
+		echo "ERROR: argument $url is not an inSPIRE address"
+		return 1
+	else
+		return 0
+	fi
+}
 
-addBibtexFromInspirePage(){
+getBibtexFromInspirePage(){
 	local inspireURL="$1"
 	
-	echo 
-	echo adding bibtex data from URL $inspireURL
-	
-	if [[ ! ( "$inspireURL" =~ http://inspirehep.net/record/* ) ]]; then echo "ERROR: argument $inspireURL is not an inSPIRE address"; echo; return 1; fi
-	
-	# local inspireSavedPageDestination="$(sed 's/.*inspirehep\.net\/record\/\([0-9]*\)/.inspirePageForRecord\1/' <<< $inspireURL)"
-	# getInspirePage "$inspireURL" "$inspireSavedPageDestination" || return 2;
-	
-	local linkToInspireBibtexPage=$(wget --output-document=- --quiet $inspireURL | grep -i bibtex | grep -o 'href="[^"]*"' | grep -o '/record.*hx') # gets the bibtex link from the page WITHOUT saving the page
+	local linkToInspireBibtexPage=$(wget --wait=5 --random-wait --output-document=- --quiet $inspireURL | grep -i bibtex | grep -o 'href="[^"]*"' | grep -o '/record.*hx') # gets the bibtex link from the page WITHOUT saving the page
 	# from that address use sed to:
 	# 1. get lines from first line matching 'pagebody' until a '</pre>' is reached - this returns the body of the page including the open and close tags
 	# 2. get text from the '@' that signifies the start of a bibtex entry until the close bracket that signifies the end of the bibtex entry - to get the bibtex in pure form
-	local bibtex="$(wget --output-document=- --quiet http://inspirehep.net$linkToInspireBibtexPage | sed -n '/pagebody/,/<\/pre>/p' | sed -n '/@/,/^}/p' )" # gets the bibtex text itself from the page WITHOUT saving the page
+	local bibtex="$(wget --wait=5 --random-wait --output-document=- --quiet http://inspirehep.net$linkToInspireBibtexPage | sed -n '/pagebody/,/<\/pre>/p' | sed -n '/@/,/^}/p' )" # gets the bibtex text itself from the page WITHOUT saving the page
 	
 	echo "$bibtex"
 	 
@@ -122,13 +109,15 @@ readOptions(){
 	while getopts ":a:" opt # the first colon suppress getopts' error messages and I substitute my own. The others indicate that an argument is taken.
 	do
 		case $opt in
-		a)	addBibtexFromInspirePage "$OPTARG";;
+		a)	LISTOFINSPIREURLS="$LISTOFINSPIREURLS $OPTARG";; # i.e. add the URL to the list of URLs
 		\?)	echo invalid option "$OPTARG"; exit 1;;
 		esac
 	done
 }
 
 main(){
+	LISTOFINSPIREURLS="" # holds the URLs that the user has passed to the program with the -a option
+	
 	readOptions "$@"
 	shift $(($OPTIND-1)) # builtin function "getopts" (inside readOptions) is always used in conjunction with "shift"
 	
@@ -138,6 +127,16 @@ main(){
 		exit 1
 	fi
 	BIBFILE=$1 # global variable
+	
+	for inspireUrl in $LISTOFINSPIREURLS
+	do
+		echo 
+		echo adding bibtex data from URL $inspireURL
+		isUrlIsAnInspireUrl $inspireUrl || continue
+		getBibtexFromInspirePage $inspireUrl >> $BIBFILE
+	done
+	echo
+	
 	echo "reading $BIBFILE"
 	
 	echo "FYI a tally chart of fields appearing in the .bib file"
