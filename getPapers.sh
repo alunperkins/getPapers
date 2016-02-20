@@ -80,7 +80,52 @@ getArxivPdf(){ # wget the pdf
 	return $?
 }
 
+getInspirePage(){ # wget the inspire webpage
+	local inspireURL="$1"
+	local inspireSavedPageDestination="$2"
+	
+	# return 0 # FOR TESTING
+	
+	echo "download inSPIRE webpage?"
+	getYN && (
+		echo
+		echo "---wget---"
+		wget -U firefox "$inspireURL" --output-document=$paperSavedPageDestination
+		echo "---/wget---"
+		echo
+	)
+	return $?
+}
+
+addBibtexFromInspirePage(){
+	local inspireURL="$1"
+	
+	echo 
+	echo adding bibtex data from URL $inspireURL
+	
+	if [[ ! ( "$inspireURL" =~ http://inspirehep.net/record/* ) ]]; then echo "ERROR: argument $inspireURL is not an inSPIRE address"; echo; return 1; fi
+	
+	local inspireSavedPageDestination="$(sed 's/.*inspirehep\.net\/record\/\([0-9]*\)/.inspirePageForRecord\1/' <<< $inspireURL)"
+	 
+	getInspirePage "$inspireURL" "$inspireSavedPageDestination" || return 2;
+	local
+	 
+}
+
+readOptions(){
+	while getopts ":a:" opt # the first colon suppress getopts' error messages and I substitute my own. The others indicate that an argument is taken.
+	do
+		case $opt in
+		a)	addBibtexFromInspirePage "$OPTARG";;
+		\?)	echo invalid option "$OPTARG"; exit 1;;
+		esac
+	done
+}
+
 main(){
+	readOptions "$@"
+	shift $(($OPTIND-1)) # builtin function "getopts" (inside readOptions) is always used in conjunction with "shift"
+	
 	if [[ ! $# == 1 ]] # if number of arguments isn't exactly 1
 	then
 		echo "provide the name of the .bib file"
