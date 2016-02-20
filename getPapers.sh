@@ -80,22 +80,22 @@ getArxivPdf(){ # wget the pdf
 	return $?
 }
 
-getInspirePage(){ # wget the inspire webpage
-	local inspireURL="$1"
-	local inspireSavedPageDestination="$2"
-	
-	# return 0 # FOR TESTING
-	
-	echo "download inSPIRE webpage?"
-	getYN && (
-		echo
-		echo "---wget---"
-		wget -U firefox "$inspireURL" --output-document=$paperSavedPageDestination
-		echo "---/wget---"
-		echo
-	)
-	return $?
-}
+#getInspirePage(){ # wget the inspire webpage
+	#local inspireURL="$1"
+	#local inspireSavedPageDestination="$2"
+#	
+	## return 0 # FOR TESTING
+#	
+	#echo "download inSPIRE webpage?"
+	#getYN && (
+		#echo
+		#echo "---wget---"
+		#wget -U firefox "$inspireURL" --output-document=$paperSavedPageDestination
+		#echo "---/wget---"
+		#echo
+	#)
+	#return $?
+#}
 
 addBibtexFromInspirePage(){
 	local inspireURL="$1"
@@ -105,10 +105,16 @@ addBibtexFromInspirePage(){
 	
 	if [[ ! ( "$inspireURL" =~ http://inspirehep.net/record/* ) ]]; then echo "ERROR: argument $inspireURL is not an inSPIRE address"; echo; return 1; fi
 	
-	local inspireSavedPageDestination="$(sed 's/.*inspirehep\.net\/record\/\([0-9]*\)/.inspirePageForRecord\1/' <<< $inspireURL)"
-	 
-	getInspirePage "$inspireURL" "$inspireSavedPageDestination" || return 2;
-	local
+	# local inspireSavedPageDestination="$(sed 's/.*inspirehep\.net\/record\/\([0-9]*\)/.inspirePageForRecord\1/' <<< $inspireURL)"
+	# getInspirePage "$inspireURL" "$inspireSavedPageDestination" || return 2;
+	
+	local linkToInspireBibtexPage=$(wget --output-document=- --quiet $inspireURL | grep -i bibtex | grep -o 'href="[^"]*"' | grep -o '/record.*hx') # gets the bibtex link from the page WITHOUT saving the page
+	# from that address use sed to:
+	# 1. get lines from first line matching 'pagebody' until a '</pre>' is reached - this returns the body of the page including the open and close tags
+	# 2. get text from the '@' that signifies the start of a bibtex entry until the close bracket that signifies the end of the bibtex entry - to get the bibtex in pure form
+	local bibtex="$(wget --output-document=- --quiet http://inspirehep.net$linkToInspireBibtexPage | sed -n '/pagebody/,/<\/pre>/p' | sed -n '/@/,/^}/p' )" # gets the bibtex text itself from the page WITHOUT saving the page
+	
+	echo "$bibtex"
 	 
 }
 
