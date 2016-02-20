@@ -5,9 +5,8 @@ readonly TITLELENGTHLIMIT=100 # to limit the number of characters in a paper's t
 readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the authors' names as they appear in the paper's filename
 
 # TO DO
-# for non-arxiv papers fetch the abstracts from inSPIRE instead
+# for non-arxiv papers fetch the abstracts from inSPIRE instead - actually forget this because often for old papers inSPIRE doesn't show the abstract either
 # fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
-# add feature to take a list of inSPIRE URLs as argument and automatically retrieve the bibtex, and add it to the .bib file - perhaps this functionality would be a separate script?
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
 # look up what the other bibtex types are (aside from articles) and allow all ones with the same fields/arxiv stuff, etc. The program didn't deal with an "inproceedings" when I asked it to, even though enough of the fields were the same that it could have dealt with it fine.
@@ -81,9 +80,23 @@ getArxivPdf(){ # wget the pdf
 	return $?
 }
 
+addBibtexToBibfile(){
+	local bibtex="$1"	
+	local paperUIDLine="$(grep '@' <<< "$bibtex" | grep -o '{.*')"
+	
+	grep "$paperUIDLine" "$BIBFILE"
+	local uidAlreadyPresent=$?
+	if [[ uidAlreadyPresent -eq true ]]
+	then
+		echo "Error: The bib file already contains an entry with the same identifier as the paper at this inspire url"
+	else
+		echo "$bibtex" >> "$BIBFILE"
+	fi
+}
+
 isUrlIsAnInspireUrl(){
 	local url="$1"
-	if [[ ! ( "$url" =~ http://inspirehep.net/record/* ) ]]
+	if [[ ! ( "$url" =~ ^https*://inspirehep.net/record/[0-9][0-9]*$ ) ]]
 	then 
 		echo "ERROR: argument $url is not an inSPIRE address"
 		return 1
@@ -102,7 +115,6 @@ getBibtexFromInspirePage(){
 	local bibtex="$(wget --wait=5 --random-wait --output-document=- --quiet http://inspirehep.net$linkToInspireBibtexPage | sed -n '/pagebody/,/<\/pre>/p' | sed -n '/@/,/^}/p' )" # gets the bibtex text itself from the page WITHOUT saving the page
 	
 	echo "$bibtex"
-	 
 }
 
 readOptions(){
@@ -126,21 +138,21 @@ main(){
 		echo "provide the name of the .bib file"
 		exit 1
 	fi
-	BIBFILE=$1 # global variable
+	BIBFILE="$1" # global variable
 	
 	for inspireUrl in $LISTOFINSPIREURLS
 	do
 		echo 
 		echo adding bibtex data from URL $inspireURL
 		isUrlIsAnInspireUrl $inspireUrl || continue
-		getBibtexFromInspirePage $inspireUrl >> $BIBFILE
+		addBibtexToBibfile "$(getBibtexFromInspirePage $inspireUrl)" # >> "$BIBFILE"
 	done
-	echo
+	echo "" # a blank line
 	
 	echo "reading $BIBFILE"
 	
 	echo "FYI a tally chart of fields appearing in the .bib file"
-	grep -o '^[^=]* =' $BIBFILE | grep '\S.*' | sort | uniq --count # | sort --numeric-sort
+	grep -o '^[^=]* =' "$BIBFILE" | grep '\S.*' | sort | uniq --count # | sort --numeric-sort
 
 	echo "this program generally only uses the arxiv, but for non-arxiv papers it can still manage file/names and add info to the bibtex."
 	echo "it will look for non-arxiv papers that have been downloaded manually in the folder $MANUALDOWNLOADSFOLDER"
@@ -151,9 +163,9 @@ main(){
 	fi
 	echo "" # a blank line 
 	
-	old_IFS=$IFS	# save the field separator           
+	old_IFS=$IFS	# save the field separator
 	IFS=@	# the field separator used in bib
-	for paper in $(cat $BIBFILE)
+	for paper in $(cat "$BIBFILE")
 	do
 		# STEP 1 : check if the item is suitable
 		echo "---------------------------------------"
@@ -168,25 +180,29 @@ main(){
 		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
 		local paperUID="$(sed -n -e 's/article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
-		if [[ -z "$paperAuthorsSurnames" ]]; then echo "couldn't read author's names - please check the bib file"; continue; fi
-		if [[ -z "$paperYear" ]]; then echo "couldn't read publication year - please check the bib file"; continue; fi
-		if [[ -z "$paperTitle" ]]; then echo "couldn't read paper title - please check the bib file"; continue; fi
-		if [[ -z "$paperTitleSanitised" ]]; then echo "paper title couldn't be used - please check the bib file"; continue; fi
-		if [[ -z "$paperUID" ]]; then echo "couldn't read paper's UID - please check the bib file"; continue; fi
+		if [[ -z "$paperAuthorsSurnames" ]]; 	then echo "couldn't read author's names - please check the bib file"; 		continue; fi
+		if [[ -z "$paperYear" ]]; 		then echo "couldn't read publication year - please check the bib file"; 	continue; fi
+		if [[ -z "$paperTitle" ]]; 		then echo "couldn't read paper title - please check the bib file"; 		continue; fi
+		if [[ -z "$paperTitleSanitised" ]]; 	then echo "paper title couldn't be used - please check the bib file"; 		continue; fi
+		if [[ -z "$paperUID" ]]; 		then echo "couldn't read paper's UID - please check the bib file"; 		continue; fi
 		
+		# STEP 2: generate a filename - it's important not to change this code as it will render the previously-downloaded pdfs invisible to the program
 		# for the filenames take:
 		#  the surnames of the authors - if too long then replace the later authors with "et Al."
 		#  the year published
 		#  the paper's title - if too long then cut off the end, but then remove trailing spaces
 		local paperTitleSanitisedLengthLimited=${paperTitleSanitised:0:$TITLELENGTHLIMIT}
 		if [[ ${#paperAuthorsSurnames} -gt $AUTHORNAMESLENGTHLIMIT ]]
-		then local paperAuthorsSurnamesLengthLimited=$(grep -o '^.*,'<<<${paperAuthorsSurnames:0:$AUTHORNAMESLENGTHLIMIT})etAl
-		else local paperAuthorsSurnamesLengthLimited=$paperAuthorsSurnames
+		then 
+			local paperAuthorsSurnamesLengthLimited=$(grep -o '^.*,'<<<${paperAuthorsSurnames:0:$AUTHORNAMESLENGTHLIMIT})etAl
+		else 
+			local paperAuthorsSurnamesLengthLimited=$paperAuthorsSurnames
 		fi
+		# in this syntax ${varName%,} deletes a comma from the end of $varName if present, and similarly ${varName% } deletes a space if present
 		paperFilenameSuggestion="${paperAuthorsSurnamesLengthLimited%,} - $paperYear - ${paperTitleSanitisedLengthLimited% }.pdf" 
 		echo "target filename : $paperFilenameSuggestion"
 		
-		# STEP 3: branch for arxiv/non-arxiv
+		# STEP 4: branch for arxiv/non-arxiv
 		# check if it is on arxiv === "ARXIV" appears in its bib entry
 		echo $paper | grep -i ARXIV >/dev/null
 		local onArxiv=$?
@@ -195,7 +211,7 @@ main(){
 			echo "on arxiv"
 			local paperEprintNo="$(echo $paper | grep -o 'eprint\s*= "[^"]*'  | sed 's/eprint\s*= "//')" # possible formats include 1501.0006, 1106.4657, hep-th/0206219
 			
-			# STEP 4: get the webpage / make sure we have it already
+			# STEP 5: get the webpage / make sure we have it already
 			
 			# HOWEVER, there may be a v2 or v3 on the archive - to find out we must consult the webpage
 			local paperSavedPage=.${paperFilenameSuggestion}_arxivpage
@@ -216,7 +232,7 @@ main(){
 			local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
 			addAbstractField "$paper" "$paperUID" "$paperAbstract"
 			
-			# STEP 5: get the pdf / make sure we have it already
+			# STEP 6: get the pdf / make sure we have it already
 			
 			if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
 			then # then download the pdf
@@ -230,8 +246,8 @@ main(){
 		else
 			echo "not on arxiv"
 			# if it is not available on the arXiv then:
-			# NOT APPLICABLE (STEP 4: get the webpage / make sure we have it already) - could retrieve the abstract from the inspire page instead?
-			# STEP 5: find the pdf
+			# NOT APPLICABLE (STEP 5: get the webpage / make sure we have it already) - could retrieve the abstract from the inspire page instead?
+			# STEP 6: find the pdf
 			if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
 			then # then ask the user to point out the pdf
 				echo "PDF: ABSENT OR WRONGLY NAMED"
