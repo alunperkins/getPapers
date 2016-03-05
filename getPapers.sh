@@ -171,8 +171,9 @@ main(){
 	do
 		# STEP 1 : check if the item is suitable
 		echo "---------------------------------------"
-		echo "bib item: ${paper:0:7}" # the first seven characters of the bib entry
-		if [[ ! "$paper" =~ ^article ]]; then echo "not an article - skipping..."; continue; fi # skip if not an article
+		# REMOVED the requirement that it be document type "article"
+		#echo "bib item: ${paper:0:7}" # the first seven characters of the bib entry
+		#if [[ ! "$paper" =~ ^article ]]; then echo "not an article - skipping..."; continue; fi # skip if not an article
 		
 		# STEP 2 : read the data into variables
 		# regex in next line is: grep for author field | but delete the author tag itself | find surnames = nonblank characters before a comma | deal with {t'Hooft} | remove newlines
@@ -188,7 +189,7 @@ main(){
 		if [[ -z "$paperTitleSanitised" ]]; 	then echo "paper title couldn't be used - please check the bib file"; 		continue; fi
 		if [[ -z "$paperUID" ]]; 		then echo "couldn't read paper's UID - please check the bib file"; 		continue; fi
 		
-		# STEP 2: generate a filename - it's important not to change this code as it will render the previously-downloaded pdfs invisible to the program
+		# STEP 3: generate a filename - it's important not to change this code as it will render the previously-downloaded pdfs invisible to the program
 		# for the filenames take:
 		#  the surnames of the authors - if too long then replace the later authors with "et Al."
 		#  the year published
@@ -212,6 +213,7 @@ main(){
 		then
 			echo "on arxiv"
 			local paperEprintNo="$(echo $paper | grep -o 'eprint\s*= "[^"]*'  | sed 's/eprint\s*= "//')" # possible formats include 1501.0006, 1106.4657, hep-th/0206219
+			if [[ -z "$paperEprintNo" ]]; 		then echo "couldn't read paper's eprint number - please check the bib file"; 		continue; fi
 			
 			# STEP 5: get the webpage / make sure we have it already
 			
