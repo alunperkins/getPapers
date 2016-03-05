@@ -66,7 +66,6 @@ getArxivPage(){ # wget the archive webpage - it has information we need
 	)
 	return $?
 }
-
 getArxivPdf(){ # wget the pdf
 	local paperSavedPage="$1"
 	local paperFilenameDestination="$2"
@@ -80,6 +79,25 @@ getArxivPdf(){ # wget the pdf
 		echo
 	)
 	return $?
+}
+# versions of those that avoid saving the arxiv page - will have to rename them later...
+echoArxivPage(){
+	local paperEprintNo="$1"
+	local arxivPage="$(wget -U firefox --wait=5 --random-wait --output-document=- --quiet "http://arxiv.org/abs/$paperEprintNo")" # gets the arxiv page WITHOUT saving the page
+	echo "$arxivPage"
+}
+saveArxivPdf(){
+	local arxivPage="$1"
+	local paperFilenameDestination="$2"
+	local paperpdfURL="http://arxiv.org$(grep 'href=.*PDF' <<<"$arxivPage" | grep -o '/pdf/[^"]*')" # regex is grep for line containing the link | grep for the actual URL
+	echo "download arxiv pdf?"
+	getYN && (
+		echo
+		echo "---wget---"
+		wget -U firefox --wait=5 --random-wait --output-document="$paperFilenameDestination" "$paperpdfURL"
+		echo "---/wget---"
+		echo
+	)
 }
 
 addBibtexToBibfile(){
@@ -113,8 +131,9 @@ getBibtexFromInspirePage(){
 	local linkToInspireBibtexPage=$(wget --wait=5 --random-wait --output-document=- --quiet $inspireURL | grep -i bibtex | grep -o 'href="[^"]*"' | grep -o '/record.*hx') # gets the bibtex link from the page WITHOUT saving the page
 	# from that address use sed to:
 	# 1. get lines from first line matching 'pagebody' until a '</pre>' is reached - this returns the body of the page including the open and close tags
-	# 2. get text from the '@' that signifies the start of a bibtex entry until the close bracket that signifies the end of the bibtex entry - to get the bibtex in pure form
+	# 2. get text from the '@' that signifies the start of a bibtex entry until the line that starts with a close curlybracket that signifies the end of the bibtex entry - to get the bibtex in pure form
 	local bibtex="$(wget --wait=5 --random-wait --output-document=- --quiet http://inspirehep.net$linkToInspireBibtexPage | sed -n '/pagebody/,/<\/pre>/p' | sed -n '/@/,/^}/p' )" # gets the bibtex text itself from the page WITHOUT saving the page
+	# CHECK: how easy/necessary is it to put here a check that that last command suceeded and/or $bibtex contains a valid value?
 	
 	echo "$bibtex"
 }
