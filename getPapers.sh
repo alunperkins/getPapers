@@ -129,9 +129,9 @@ isUrlIsAnInspireUrl(){
 }
 
 getBibtexFromInspirePage(){
-	local inspireURL="$1"
+	local inspireUrl="$1"
 	
-	local linkToInspireBibtexPage=$(wget --wait=5 --random-wait --output-document=- --quiet $inspireURL | grep -i bibtex | grep -o 'href="[^"]*"' | grep -o '/record.*hx') # gets the bibtex link from the page WITHOUT saving the page
+	local linkToInspireBibtexPage=$(wget --wait=5 --random-wait --output-document=- --quiet $inspireUrl | grep -i bibtex | grep -o 'href="[^"]*"' | grep -o '/record.*hx') # gets the bibtex link from the page WITHOUT saving the page
 	# from that address use sed to:
 	# 1. get lines from first line matching 'pagebody' until a '</pre>' is reached - this returns the body of the page including the open and close tags
 	# 2. get text from the '@' that signifies the start of a bibtex entry until the line that starts with a close curlybracket that signifies the end of the bibtex entry - to get the bibtex in pure form
@@ -167,7 +167,7 @@ main(){
 	for inspireUrl in $LISTOFINSPIREURLS
 	do
 		echo 
-		echo adding bibtex data from URL $inspireURL
+		echo adding bibtex data from URL $inspireUrl
 		isUrlIsAnInspireUrl $inspireUrl || continue
 		addBibtexToBibfile "$(getBibtexFromInspirePage $inspireUrl)" # >> "$BIBFILE"
 	done
@@ -252,7 +252,8 @@ main(){
 			# STEP 6: check for abstract field and pdf - if either are absent then we need to download the arxiv webpage
 			if [[ $paperPdfPresent -ne true || $paperAbstractFieldPresent -ne true ]]
 			then
-				local arxivpage="$(echoArxivPage "$paperEprintNo")"
+				local arxivPage="$(echoArxivPage "$paperEprintNo")"
+				# CHECK should add a check that the webpage was retrieved sucessfully / that $arxivPage contains valid data
 			fi
 			
 			# STEP 7: in case somehow the pdf got saved but a localfile field was not added to the bibtex at that time, check now and add a localfile field if necessary
@@ -264,7 +265,7 @@ main(){
 			# STEP 8: if do not have pdf then get it
 			if [[ $paperPdfPresent -ne true ]]
 			then
-				saveArxivPdf "$arxivpage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
+				saveArxivPdf "$arxivPage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
 			fi
 			
 			# STEP 9: if do not have abstract then add it (to the bibtex)
@@ -272,8 +273,13 @@ main(){
 			if [[ $paperAbstractFieldPresent -ne true ]]
 			then
 				# regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
-				local paperAbstract="$(tr '\n' ' ' <<< $arxivpage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
-				addAbstractField "$paper" "$paperUID" "$paperAbstract"
+				local paperAbstract="$(tr '\n' ' ' <<< $arxivPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
+				if [[ -z "$paperAbstract" ]]
+				then 
+					echo "couldn't read paper's abstract"
+				else
+					addAbstractField "$paper" "$paperUID" "$paperAbstract"
+				fi
 			fi
 			
 			# OLD - DEPRECATED
