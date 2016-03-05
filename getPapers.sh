@@ -12,7 +12,7 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # look up what the other bibtex types are (aside from articles) and allow all ones with the same fields/arxiv stuff, etc. The program didn't deal with an "inproceedings" when I asked it to, even though enough of the fields were the same that it could have dealt with it fine.
 # change the behaviour of arxiv pages so that it gets the link to the pdf without saving the page.
 # would like it to edit bibtex/process new bibtex fetched from inSPIRE, such that the newline within a field value are removed!
-# regex needs work - it failed to cope with bibtex that had a 'title' field followed by a 'booktitle' field!
+# regex needs work - it failed to cope with bibtex that had a 'title' field followed by a 'booktitle' field! - now fixed. But do the other field need similar treatment?
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
@@ -176,11 +176,11 @@ main(){
 		
 		# STEP 2 : read the data into variables
 		# regex in next line is: grep for author field | but delete the author tag itself | find surnames = nonblank characters before a comma | deal with {t'Hooft} | remove newlines
-		local paperAuthorsSurnames="$(echo $paper | grep -o 'author\s*= "[^"]*'  | sed 's/author\s*= "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
-		local paperYear="$(echo $paper | grep -o 'year\s*= "[^"]*'  | sed 's/year\s*= "//')"
+		local paperAuthorsSurnames="$(echo $paper | grep -o '^\s*author\s*= "[^"]*'  | sed 's/\s*author\s*= "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
+		local paperYear="$(echo $paper | grep -o '^\s*year\s*= "[^"]*'  | sed 's/\s*year\s*= "//')"
 		local paperTitle="$(echo $paper | grep -o '^\s*title\s*= "[^"]*'  | sed 's/\s*title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
 		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
-		local paperUID="$(sed -n -e 's/article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
+		local paperUID="$(sed -n -e 's/^article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
 		if [[ -z "$paperAuthorsSurnames" ]]; 	then echo "couldn't read author's names - please check the bib file"; 		continue; fi
 		if [[ -z "$paperYear" ]]; 		then echo "couldn't read publication year - please check the bib file"; 	continue; fi
