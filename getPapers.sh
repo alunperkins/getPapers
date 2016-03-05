@@ -11,6 +11,8 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
 # look up what the other bibtex types are (aside from articles) and allow all ones with the same fields/arxiv stuff, etc. The program didn't deal with an "inproceedings" when I asked it to, even though enough of the fields were the same that it could have dealt with it fine.
 # change the behaviour of arxiv pages so that it gets the link to the pdf without saving the page.
+# would like it to edit bibtex/process new bibtex fetched from inSPIRE, such that the newline within a field value are removed!
+# regex needs work - it failed to cope with bibtex that had a 'title' field followed by a 'booktitle' field!
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
