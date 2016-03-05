@@ -176,7 +176,7 @@ main(){
 		# regex in next line is: grep for author field | but delete the author tag itself | find surnames = nonblank characters before a comma | deal with {t'Hooft} | remove newlines
 		local paperAuthorsSurnames="$(echo $paper | grep -o 'author\s*= "[^"]*'  | sed 's/author\s*= "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
 		local paperYear="$(echo $paper | grep -o 'year\s*= "[^"]*'  | sed 's/year\s*= "//')"
-		local paperTitle="$(echo $paper | grep -o 'title\s*= "[^"]*'  | sed 's/title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
+		local paperTitle="$(echo $paper | grep -o '^\s*title\s*= "[^"]*'  | sed 's/\s*title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
 		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
 		local paperUID="$(sed -n -e 's/article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
@@ -264,7 +264,7 @@ main(){
 					if [[ ! -f "$fileContainingPaper" ]]; then echo -e "\ninvalid choice\n"; break; fi	
 					echo -e "\nrename            $fileContainingPaper            to            $paperFilenameSuggestion            ?"
 					getYN && mv -i $fileContainingPaper $paperFilenameSuggestion && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
-					break
+					break # you only get out of a select statement with a break statement
 				done
 				IFS=$slightly_old_IFS	# restore default field separator
 			else # if there is already a file for the pdf
