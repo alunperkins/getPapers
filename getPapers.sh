@@ -24,7 +24,7 @@ addFileField(){ # edits the bib file
 	local paperUID="$2"
 	local paperFilename="$3"
 	# check if there is a "file" field already
-	echo $paper| grep 'file\s*= ' >/dev/null
+	echo $paper| grep -i '^\s*localfile\s*= ' >/dev/null
 	local paperFileFieldPresent=$?
 	if [[ $paperFileFieldPresent -ne true ]]
 	then
@@ -32,7 +32,7 @@ addFileField(){ # edits the bib file
 		#sed -i "s/^\(\s*\)year = ".*$paperYear[^,]*"/&,\n\1file = ":$paperFilename:pdf"/" $BIBFILE # should work correctly if the UID line has a comma or not === is last or not
 		sed -i "s/$paperUID,/&\n	localfile = \"$paperFilename\",/" $BIBFILE
 	else
-		echo "the bib entry already has a file listed"
+		echo "the bib entry already has a file listed - not updating it with path to the pdf"
 	fi
 }
 addAbstractField(){ # edits the bib file
@@ -41,7 +41,7 @@ addAbstractField(){ # edits the bib file
 	local paperAbstract="$3"
 	local paperAbstractSanitised=$(printf '%s\n' "$paperAbstract" | tr -d '@"' | sed 's/[\&/|$]/\\&/g') # delete @ and " and escape the special characters \&/ (e.g. from LaTeX) suitably to appear in RHS of a sed command
 	# check if there is an "abstract" field already
-	echo $paper| grep 'abstract\s*= ' >/dev/null
+	echo $paper| grep -i '^\s*abstract\s*= ' >/dev/null
 	local paperAbstractFieldPresent=$?
 	if [[ $paperAbstractFieldPresent -ne true ]]
 	then
@@ -49,11 +49,13 @@ addAbstractField(){ # edits the bib file
 		#sed -i "s@^\(\s*\)year = ".*$paperYear[^,]*"@&,\n\1abstract = "\{$paperAbstractSanitised\}"@" $BIBFILE # should work correctly if the UID line has a comma or not === is last or not
 		sed -i "s/$paperUID,/&\n	abstract = \"$paperAbstractSanitised\",/" $BIBFILE
 	else
-		echo "the bib entry already has an abstract"
+		echo "the bib entry already has an abstract - not updating it with the abstract"
+		echo "ERROR: addAbstractField was called on bibtex that already had an abstract! That's not supposed to happen any more."
 	fi
 }
 
-getArxivPage(){ # wget the archive webpage - it has information we need
+getArxivPage(){ # wget the archive webpage - it has information we need # DEPRECATED
+	echo "WARNING: function getArxivPage is deprecated!"
 	local paperEprintNo="$1"
 	local paperSavedPageDestination="$2"
 	echo "download arxiv webpage?"
@@ -66,7 +68,8 @@ getArxivPage(){ # wget the archive webpage - it has information we need
 	)
 	return $?
 }
-getArxivPdf(){ # wget the pdf
+getArxivPdf(){ # wget the pdf # DEPRECATED
+	echo "WARNING: function getArxivPdf is deprecated!"
 	local paperSavedPage="$1"
 	local paperFilenameDestination="$2"
 	local paperpdfURL="http://arxiv.org$(grep 'href=.*PDF' $paperSavedPage | grep -o '/pdf/[^"]*')" # regex is grep for line containing the link | grep for the actual URL
@@ -196,9 +199,9 @@ main(){
 		
 		# STEP 2 : read the data into variables
 		# regex in next line is: grep for author field | but delete the author tag itself | find surnames = nonblank characters before a comma | deal with {t'Hooft} | remove newlines
-		local paperAuthorsSurnames="$(echo $paper | grep -o '^\s*author\s*= "[^"]*'  | sed 's/\s*author\s*= "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
-		local paperYear="$(echo $paper | grep -o '^\s*year\s*= "[^"]*'  | sed 's/\s*year\s*= "//')"
-		local paperTitle="$(echo $paper | grep -o '^\s*title\s*= "[^"]*'  | sed 's/\s*title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
+		local paperAuthorsSurnames="$(echo $paper | grep -io '^\s*author\s*= "[^"]*'  | sed 's/\s*author\s*= "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
+		local paperYear="$(echo $paper | grep -io '^\s*year\s*= "[^"]*'  | sed 's/\s*year\s*= "//')"
+		local paperTitle="$(echo $paper | grep -io '^\s*title\s*= "[^"]*'  | sed 's/\s*title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
 		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
 		local paperUID="$(sed -n -e 's/^article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
@@ -225,52 +228,91 @@ main(){
 		echo "target filename : $paperFilenameSuggestion"
 		
 		# STEP 4: branch for arxiv/non-arxiv
-		# check if it is on arxiv === "ARXIV" appears in its bib entry
+		# check if it is on arxiv === "ARXIV" appears in its bib entry [CHECK could improve the exact criteria for determining if something is on the arxiv...]
 		echo $paper | grep -i ARXIV >/dev/null
 		local onArxiv=$?
 		if [[ $onArxiv -eq true ]]
 		then
 			echo "on arxiv"
-			local paperEprintNo="$(echo $paper | grep -o 'eprint\s*= "[^"]*'  | sed 's/eprint\s*= "//')" # possible formats include 1501.0006, 1106.4657, hep-th/0206219
+						
+			# STEP 5: store info in variables
+			local paperEprintNo="$(echo $paper | grep -io '^\s*eprint\s*= "[^"]*'  | sed 's/\s*eprint\s*= "//')" # eprint possible formats include 1501.0006, 1106.4657, hep-th/0206219
 			if [[ -z "$paperEprintNo" ]]; 		then echo "couldn't read paper's eprint number - please check the bib file"; 		continue; fi
 			
-			# STEP 5: get the webpage / make sure we have it already
+			[[ -e $paperFilenameSuggestion ]]
+			local paperPdfPresent=$?
 			
-			# HOWEVER, there may be a v2 or v3 on the archive - to find out we must consult the webpage
-			local paperSavedPage=.${paperFilenameSuggestion}_arxivpage
-			if [[ -e $paperSavedPage ]]
+			# move the checks for abstract/file field here, to main, from function "addAbstractField"
+			echo $paper| grep -i '^\s*abstract\s*= ' >/dev/null
+			local paperAbstractFieldPresent=$?
+			
+			echo $paper| grep -i '^\s*localfile\s*= ' >/dev/null
+			local paperFileFieldPresent=$?
+			
+			# STEP 6: check for abstract field and pdf - if either are absent then we need to download the arxiv webpage
+			if [[ $paperPdfPresent -ne true || $paperAbstractFieldPresent -ne true ]]
 			then
-				echo "WEBPAGE: PRESENT (saved as $paperSavedPage)"
-			else
-				echo "WEBPAGE: ABSENT. Downloading..."
-				getArxivPage "$paperEprintNo" "$paperSavedPage"
-				if [[ $? -ne 0 ]]; then echo "error finding arxiv page"; continue; fi
+				local arxivpage="$(echoArxivPage "$paperEprintNo")"
 			fi
 			
-			# -- downloaded webpage file must be present in order for this line to be reached --
-			
-			# update the bib with the abstract from the webpage
-			# regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
-			#local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \([^<>]*\)</blockquote.*@\1@')"
-			local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
-			addAbstractField "$paper" "$paperUID" "$paperAbstract"
-			
-			# STEP 6: get the pdf / make sure we have it already
-			
-			if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
-			then # then download the pdf
-				echo "PDF: ABSENT"
-				getArxivPdf "$paperSavedPage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
-			else
-				echo "PDF: PRESENT"
-				addFileField "$paper" "$paperUID" "$paperFilenameSuggestion" # this can handle case that there is already a file field
+			# STEP 7: in case somehow the pdf got saved but a localfile field was not added to the bibtex at that time, check now and add a localfile field if necessary
+			if [[ $paperPdfPresent -eq true && $paperFileFieldPresent -ne true ]]
+			then 
+				addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
 			fi
+			
+			# STEP 8: if do not have pdf then get it
+			if [[ $paperPdfPresent -ne true ]]
+			then
+				saveArxivPdf "$arxivpage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
+			fi
+			
+			# STEP 9: if do not have abstract then add it (to the bibtex)
+			# the called function "addAbstractField" already contains a check that there is not already an abstract in the bibtex - this should no longer be necessary!
+			if [[ $paperAbstractFieldPresent -ne true ]]
+			then
+				# regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
+				local paperAbstract="$(tr '\n' ' ' <<< $arxivpage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
+				addAbstractField "$paper" "$paperUID" "$paperAbstract"
+			fi
+			
+			# OLD - DEPRECATED
+			# # STEP 5: get the webpage / make sure we have it already
+			# 
+			# # HOWEVER, there may be a v2 or v3 on the archive - to find out we must consult the webpage
+			# local paperSavedPage=.${paperFilenameSuggestion}_arxivpage
+			# if [[ -e $paperSavedPage ]]
+			# then
+				# echo "WEBPAGE: PRESENT (saved as $paperSavedPage)"
+			# else
+				# echo "WEBPAGE: ABSENT. Downloading..."
+				# getArxivPage "$paperEprintNo" "$paperSavedPage"
+				# if [[ $? -ne 0 ]]; then echo "error finding arxiv page"; continue; fi
+			# fi
+			# 
+			# # -- downloaded webpage file must be present in order for this line to be reached --
+			# 
+			# # update the bib with the abstract from the webpage
+			# # regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
+			# #local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \([^<>]*\)</blockquote.*@\1@')"
+			# local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
+			# addAbstractField "$paper" "$paperUID" "$paperAbstract"
+			# 
+			# # STEP 6: get the pdf / make sure we have it already
+			# 
+			# if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
+			# then # then download the pdf
+				# echo "PDF: ABSENT"
+				# getArxivPdf "$paperSavedPage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
+			# else
+				# echo "PDF: PRESENT"
+				# addFileField "$paper" "$paperUID" "$paperFilenameSuggestion" # this can handle case that there is already a file field
+			# fi
 
 		else
 			echo "not on arxiv"
-			# if it is not available on the arXiv then:
-			# NOT APPLICABLE (STEP 5: get the webpage / make sure we have it already) - could retrieve the abstract from the inspire page instead?
-			# STEP 6: find the pdf
+			
+			# STEP 5: if cannot see the pdf, ask the user for the pdf, rename it, add the file location to the bibtex
 			if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
 			then # then ask the user to point out the pdf
 				echo "PDF: ABSENT OR WRONGLY NAMED"
