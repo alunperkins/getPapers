@@ -12,6 +12,8 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
 # when adding bibtex from an inSPIRE URL, insert the paper's abstract at that time, instead of trying our luck on the arxiv later.
+# need to write code to handle if there is no doi link in the bibtex
+# in the "read data into variables" section where paperAuthorsSurnames etc are defined, the grep is case insensitive, BUT THE SED IT NOT. FIX IT!
 
 showHelp(){
 	cat <<- _EOF_
@@ -75,12 +77,21 @@ fixNewlineUseInBibfile(){
 }
 
 addFileField(){ # edits the bib file
-	local paper="$1"
-	local paperUID="$2"
-	local paperFilename="$3"
-	# check if there is a "file" field already
-	echo $paper| grep -i '^\s*localfile\s*= ' >/dev/null
+	# local paper="$1"
+	# local paperUID="$2"
+	# local paperFilename="$3"
+	local paperUID="$1"
+	local paperFilename="$2"
+	
+	# check if there is a "file" field already # OLD
+	# echo $paper| grep -i '^\s*localfile\s*= ' >/dev/null
+	# local paperFileFieldPresent=$?
+	
+	# check if there is a "file" field already # NEW
+	# sed to get the bibtex of this paper, then check it for a "localfile" field
+	sed -n '/$paperUID/,/^}\s*$/p' $BIBFILE | grep -i '^\s*localfile\s*= ' >/dev/null
 	local paperFileFieldPresent=$?
+	
 	if [[ $paperFileFieldPresent -ne true ]]
 	then
 		echo "updating the bib file with (relative) path to pdf"
@@ -173,6 +184,23 @@ addBibtexToBibfile(){
 	fi
 }
 
+selectFileFromManualDownloadsFolder(){
+	local paperFilenameSuggestion="$1"
+	local paperUID="$2"
+	
+	local old_IFS=$IFS	# save the field separator           
+	IFS=$'\n'	# new field separator
+	select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 $MANUALDOWNLOADSFOLDER/* | grep -v $BIBFILE )") # if manuallyDownloadedPdfs is empty this gives "ls: cannot access manuallyDownloadedPdfs/*: No such file or directory". Meh.
+	do
+		if [[ "$fileContainingPaper" =~ "CANCEL THIS MENU" ]]; then break; fi
+		if [[ ! -f "$fileContainingPaper" ]]; then echo -e "\ninvalid choice\n"; break; fi	
+		echo -e "\nrename            $fileContainingPaper            to            $paperFilenameSuggestion            ?"
+		getYN && mv -i $fileContainingPaper $paperFilenameSuggestion && addFileField "$paperUID" "$paperFilenameSuggestion"
+		break # you only get out of a select statement with a break statement
+	done
+	IFS=$old_IFS	# restore default field separator
+}
+
 isUrlIsAnInspireUrl(){
 	local url="$1"
 	if [[ ! ( "$url" =~ ^https*://inspirehep.net/record/[0-9][0-9]*$ ) ]]
@@ -246,7 +274,7 @@ main(){
 	fi
 	echo "" # a blank line 
 	
-	old_IFS=$IFS	# save the field separator
+	local old_IFS=$IFS	# save the field separator
 	IFS=@	# the field separator used in bib
 	for paper in $(fixNewlineUseInBibfile "$BIBFILE")
 	do
@@ -270,6 +298,10 @@ main(){
 		if [[ -z "$paperTitleSanitised" ]]; 	then echo "paper title couldn't be used - please check the bib file"; 		continue; fi
 		if [[ -z "$paperUID" ]]; 		then echo "couldn't read paper's UID - please check the bib file"; 		continue; fi
 		
+		# need to write code to handle the event that there is no doi field in the bibtex!
+		local paperDoiLink=http://dx.doi.org/"$(echo $paper | grep -io '^\s*doi\s*= "[^"]*'  | sed 's/\s*[Dd][Oo][Ii]\s*= "//' )"
+		# if [[ -z "$paperDoiLink" ]] then SOMETHING?
+		
 		# STEP 3: generate a filename - it's important not to change this code as it will render the previously-downloaded pdfs invisible to the program
 		# for the filenames take:
 		#  the surnames of the authors - if too long then replace the later authors with "et Al."
@@ -286,123 +318,217 @@ main(){
 		paperFilenameSuggestion="${paperAuthorsSurnamesLengthLimited%,} - $paperYear - ${paperTitleSanitisedLengthLimited% }.pdf" 
 		echo "target filename : $paperFilenameSuggestion"
 		
-		# STEP 4: branch for arxiv/non-arxiv
-		# check if it is on arxiv === "ARXIV" appears in its bib entry [CHECK could improve the exact criteria for determining if something is on the arxiv...]
+		# STEP 4: store info in variables
+		
 		echo $paper | grep -i ARXIV >/dev/null
 		local onArxiv=$?
-		if [[ $onArxiv -eq true ]]
+		
+		echo $paper| grep -i '^\s*localfile\s*= ' >/dev/null
+		local paperFileFieldPresent=$?
+		
+		# move the checks for abstract/file field here, to main, from function "addAbstractField"
+		echo $paper| grep -i '^\s*abstract\s*= ' >/dev/null
+		local paperAbstractFieldPresent=$?
+		
+		[[ -e $paperFilenameSuggestion ]]
+		local paperPdfPresent=$?
+		
+		# we may need the arxiv webpage later. If so, we download it here.
+		# we're going to need the arxiv webpage if ( !paperPdfPresent && onArxiv ) || ( !paperAbstractFieldPresent && onArxiv ) = onArxiv && ( !paperPdfPresent || !paperAbstractFieldPresent )
+		if [[ $onArxiv -eq true && ( $paperPdfPresent -ne true || $paperAbstractFieldPresent -ne true ) ]] # It's critical that these booleans are kept synchronised with the booleans later that lead to use of the arxivPage variable ! That's iffy design...
 		then
-			echo "on arxiv"
-						
-			# STEP 5: store info in variables
-			local paperEprintNo="$(echo $paper | grep -io '^\s*eprint\s*= "[^"]*'  | sed 's/\s*eprint\s*= "//')" # eprint possible formats include 1501.0006, 1106.4657, hep-th/0206219
+			echo "reading arxiv webpage"
+			local paperEprintNo="$(echo $paper | grep -io '^\s*eprint\s*= "[^"]*' | sed 's/\s*eprint\s*= "//')" # eprint possible formats include 1501.0006, 1106.4657, hep-th/0206219
 			if [[ -z "$paperEprintNo" ]]; 		then echo "couldn't read paper's eprint number - please check the bib file"; 		continue; fi
-			
-			[[ -e $paperFilenameSuggestion ]]
-			local paperPdfPresent=$?
-			
-			# move the checks for abstract/file field here, to main, from function "addAbstractField"
-			echo $paper| grep -i '^\s*abstract\s*= ' >/dev/null
-			local paperAbstractFieldPresent=$?
-			
-			echo $paper| grep -i '^\s*localfile\s*= ' >/dev/null
-			local paperFileFieldPresent=$?
-			
-			# STEP 6: check for abstract field and pdf - if either are absent then we need to download the arxiv webpage
-			if [[ $paperPdfPresent -ne true || $paperAbstractFieldPresent -ne true ]]
-			then
-				local arxivPage="$(echoArxivPage "$paperEprintNo")"
-				# CHECK should add a check that the webpage was retrieved sucessfully / that $arxivPage contains valid data
-			fi
-			
-			# STEP 7: in case somehow the pdf got saved but a localfile field was not added to the bibtex at that time, check now and add a localfile field if necessary
-			if [[ $paperPdfPresent -eq true && $paperFileFieldPresent -ne true ]]
-			then 
-				addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
-			fi
-			
-			# STEP 8: if do not have pdf then get it
-			if [[ $paperPdfPresent -ne true ]]
-			then
-				saveArxivPdf "$arxivPage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
-			fi
-			
-			# STEP 9: if do not have abstract then add it (to the bibtex)
-			# the called function "addAbstractField" already contains a check that there is not already an abstract in the bibtex - this should no longer be necessary!
-			if [[ $paperAbstractFieldPresent -ne true ]]
-			then
-				# regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
-				local paperAbstract="$(tr '\n' ' ' <<< $arxivPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
-				if [[ -z "$paperAbstract" ]]
-				then 
-					echo "couldn't read paper's abstract"
-				else
-					addAbstractField "$paper" "$paperUID" "$paperAbstract"
-				fi
-			fi
-			
-			# OLD - DEPRECATED
-			# # STEP 5: get the webpage / make sure we have it already
-			# 
-			# # HOWEVER, there may be a v2 or v3 on the archive - to find out we must consult the webpage
-			# local paperSavedPage=.${paperFilenameSuggestion}_arxivpage
-			# if [[ -e $paperSavedPage ]]
-			# then
-				# echo "WEBPAGE: PRESENT (saved as $paperSavedPage)"
-			# else
-				# echo "WEBPAGE: ABSENT. Downloading..."
-				# getArxivPage "$paperEprintNo" "$paperSavedPage"
-				# if [[ $? -ne 0 ]]; then echo "error finding arxiv page"; continue; fi
-			# fi
-			# 
-			# # -- downloaded webpage file must be present in order for this line to be reached --
-			# 
-			# # update the bib with the abstract from the webpage
-			# # regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
-			# #local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \([^<>]*\)</blockquote.*@\1@')"
-			# local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
-			# addAbstractField "$paper" "$paperUID" "$paperAbstract"
-			# 
-			# # STEP 6: get the pdf / make sure we have it already
-			# 
-			# if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
-			# then # then download the pdf
-				# echo "PDF: ABSENT"
-				# getArxivPdf "$paperSavedPage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
-			# else
-				# echo "PDF: PRESENT"
-				# addFileField "$paper" "$paperUID" "$paperFilenameSuggestion" # this can handle case that there is already a file field
-			# fi
-
-		else
-			echo "not on arxiv"
-			
-			# STEP 5: if cannot see the pdf, ask the user for the pdf, rename it, add the file location to the bibtex
-			if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
-			then # then ask the user to point out the pdf
-				echo "PDF: ABSENT OR WRONGLY NAMED"
-				if [[ ! -d $MANUALDOWNLOADSFOLDER ]]; then echo "could not find the folder for manually downloaded pdfs"; continue; fi
-				echo -e "\nThis paper is not on the arxiv. \nPlease browse its information and select a file from the PWD \n\npaper's bibtex entry : \n\n$paper\n"
-				# ask the user to identify this paper from among the files from the manual downloads folder
-				echo "if this paper is present please select it from within $MANUALDOWNLOADSFOLDER, by typing the number. Cancel this menu by entering '1' or using CTRL-D"
-				echo ""
-				slightly_old_IFS=$IFS	# save the field separator           
-				IFS=$'\n'	# new field separator
-				select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 $MANUALDOWNLOADSFOLDER/* | grep -v $BIBFILE )") # if manuallyDownloadedPdfs is empty this gives "ls: cannot access manuallyDownloadedPdfs/*: No such file or directory". Meh.
-				do
-					if [[ "$fileContainingPaper" =~ "CANCEL THIS MENU" ]]; then break; fi
-					if [[ ! -f "$fileContainingPaper" ]]; then echo -e "\ninvalid choice\n"; break; fi	
-					echo -e "\nrename            $fileContainingPaper            to            $paperFilenameSuggestion            ?"
-					getYN && mv -i $fileContainingPaper $paperFilenameSuggestion && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
-					break # you only get out of a select statement with a break statement
-				done
-				IFS=$slightly_old_IFS	# restore default field separator
-			else # if there is already a file for the pdf
-				echo "PDF: PRESENT"
-				addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"  # this can handle case that there is already a file field
-			fi
-			
+			local arxivPage="$(echoArxivPage "$paperEprintNo")"
+			# CHECK should add a check that the webpage was retrieved sucessfully / that $arxivPage contains valid data
 		fi
+		
+		# STEP 5: make sure we have the pdf, in order of preference: already present in pwd, download from the arxiv, look for it in manuallyDownloadedPdfs, open DOI link in default browser
+		echo
+		echo "Looking for the pdf in pwd..."
+		if [[ $paperPdfPresent -eq true ]]
+		then
+			echo "...found pdf"
+			addFileField "$paperUID" "$paperFilenameSuggestion"
+		else
+			echo "...pdf not found"
+			echo "Is the paper on the arxiv?..."
+			if [[ $onArxiv -eq true ]]
+			then
+				echo "...yes"
+				saveArxivPdf "$arxivPage" "$paperFilenameSuggestion" && addFileField "$paperUID" "$paperFilenameSuggestion"
+			else
+				echo "...no"
+				echo "Looking for a folder for user-downloaded pdfs..."
+				if [[ -d $MANUALDOWNLOADSFOLDER ]]
+				then
+					echo "...found $MANUALDOWNLOADSFOLDER"
+					echo "Would you like to point out the paper from among the files in $MANUALDOWNLOADSFOLDER?"
+					getYN && selectFileFromManualDownloadsFolder "$paperFilenameSuggestion" "$paperUID" # this also handles moving the paper and calling addFileField
+					local userSelectedFileSucess=$?
+				else
+					echo "...not found"
+					local userSelectedFileSucess=1
+				fi # end if MANUALDOWNLOADSFOLDER exists
+				# branch for whether that was successful or not
+				if [[ $userSelectedFileSucess -ne true ]]
+				then
+					echo "Failed to get file from $MANUALDOWNLOADSFOLDER"
+					echo "If you get hold of the file yourself, put it in $MANUALDOWNLOADSFOLDER so next time you run this program you can select the pdf from the list"
+					echo 
+					echo "Open the doi link '$paperDoiLink' in your default browser?"
+					# need to add a check that there was a doi link in the bibtex!
+					getYN && xdg-open "$paperDoiLink"
+				# else
+					# there is no "else" here. I don't know what else we can do to get hold of the paper.
+				fi # end if user failed to select file
+			fi # end if onArxiv
+		fi # end if paperPdfPresent
+		echo
+		
+		# if there is no abstract in the bibtex, but an abstract is available, then add the abstract if possible
+		if [[ $paperAbstractFieldPresent -ne true && $onArxiv -eq true ]]
+		then
+			addAbstractField "$paper" "$paperUID" "$paperAbstract"
+		fi
+		
+		# # ------------ ! <OLD> ! ------------
+		# 
+		# # STEP 6: check for abstract field and pdf - if either are absent then we need to download the arxiv webpage
+		# if [[ $paperPdfPresent -ne true || $paperAbstractFieldPresent -ne true ]]
+		# then
+			# local arxivPage="$(echoArxivPage "$paperEprintNo")"
+			# # CHECK should add a check that the webpage was retrieved sucessfully / that $arxivPage contains valid data
+		# fi
+		# 
+		# # STEP 7: in case somehow the pdf got saved but a localfile field was not added to the bibtex at that time, check now and add a localfile field if necessary
+		# if [[ $paperPdfPresent -eq true && $paperFileFieldPresent -ne true ]]
+		# then 
+			# addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
+		# fi
+		# 
+		# # STEP 4: branch for arxiv/non-arxiv
+		# # check if it is on arxiv === "ARXIV" appears in its bib entry [CHECK could improve the exact criteria for determining if something is on the arxiv...]
+		# echo $paper | grep -i ARXIV >/dev/null
+		# local onArxiv=$?
+		# if [[ $onArxiv -eq true ]]
+		# then
+			# echo "on arxiv"
+						# 
+			# # STEP 5: store info in variables
+			# local paperEprintNo="$(echo $paper | grep -io '^\s*eprint\s*= "[^"]*'  | sed 's/\s*eprint\s*= "//')" # eprint possible formats include 1501.0006, 1106.4657, hep-th/0206219
+			# if [[ -z "$paperEprintNo" ]]; 		then echo "couldn't read paper's eprint number - please check the bib file"; 		continue; fi
+			# 
+			# [[ -e $paperFilenameSuggestion ]]
+			# local paperPdfPresent=$?
+			# 
+			# # move the checks for abstract/file field here, to main, from function "addAbstractField"
+			# echo $paper| grep -i '^\s*abstract\s*= ' >/dev/null
+			# local paperAbstractFieldPresent=$?
+			# 
+			# echo $paper| grep -i '^\s*localfile\s*= ' >/dev/null
+			# local paperFileFieldPresent=$?
+			# 
+			# # STEP 6: check for abstract field and pdf - if either are absent then we need to download the arxiv webpage
+			# if [[ $paperPdfPresent -ne true || $paperAbstractFieldPresent -ne true ]]
+			# then
+				# local arxivPage="$(echoArxivPage "$paperEprintNo")"
+				# # CHECK should add a check that the webpage was retrieved sucessfully / that $arxivPage contains valid data
+			# fi
+			# 
+			# # STEP 7: in case somehow the pdf got saved but a localfile field was not added to the bibtex at that time, check now and add a localfile field if necessary
+			# if [[ $paperPdfPresent -eq true && $paperFileFieldPresent -ne true ]]
+			# then 
+				# addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
+			# fi
+			# 
+			# # STEP 8: if do not have pdf then get it
+			# if [[ $paperPdfPresent -ne true ]]
+			# then
+				# saveArxivPdf "$arxivPage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
+			# fi
+			# 
+			# # STEP 9: if do not have abstract then add it (to the bibtex)
+			# # the called function "addAbstractField" already contains a check that there is not already an abstract in the bibtex - this should no longer be necessary!
+			# if [[ $paperAbstractFieldPresent -ne true ]]
+			# then
+				# # regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
+				# local paperAbstract="$(tr '\n' ' ' <<< $arxivPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
+				# if [[ -z "$paperAbstract" ]]
+				# then 
+					# echo "couldn't read paper's abstract"
+				# else
+					# addAbstractField "$paper" "$paperUID" "$paperAbstract"
+				# fi
+			# fi
+			# 
+			# # OLD - DEPRECATED
+			# # # STEP 5: get the webpage / make sure we have it already
+			# # 
+			# # # HOWEVER, there may be a v2 or v3 on the archive - to find out we must consult the webpage
+			# # local paperSavedPage=.${paperFilenameSuggestion}_arxivpage
+			# # if [[ -e $paperSavedPage ]]
+			# # then
+				# # echo "WEBPAGE: PRESENT (saved as $paperSavedPage)"
+			# # else
+				# # echo "WEBPAGE: ABSENT. Downloading..."
+				# # getArxivPage "$paperEprintNo" "$paperSavedPage"
+				# # if [[ $? -ne 0 ]]; then echo "error finding arxiv page"; continue; fi
+			# # fi
+			# # 
+			# # # -- downloaded webpage file must be present in order for this line to be reached --
+			# # 
+			# # # update the bib with the abstract from the webpage
+			# # # regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
+			# # #local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \([^<>]*\)</blockquote.*@\1@')"
+			# # local paperAbstract="$(tr '\n' ' ' < $paperSavedPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
+			# # addAbstractField "$paper" "$paperUID" "$paperAbstract"
+			# # 
+			# # # STEP 6: get the pdf / make sure we have it already
+			# # 
+			# # if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
+			# # then # then download the pdf
+				# # echo "PDF: ABSENT"
+				# # getArxivPdf "$paperSavedPage" "$paperFilenameSuggestion" && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
+			# # else
+				# # echo "PDF: PRESENT"
+				# # addFileField "$paper" "$paperUID" "$paperFilenameSuggestion" # this can handle case that there is already a file field
+			# # fi
+# 
+		# else
+			# echo "not on arxiv"
+			# 
+			# # STEP 5: if cannot see the pdf, ask the user for the pdf, rename it, add the file location to the bibtex
+			# if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
+			# then # then ask the user to point out the pdf
+				# echo "PDF: ABSENT OR WRONGLY NAMED"
+				# if [[ ! -d $MANUALDOWNLOADSFOLDER ]]; then echo "could not find the folder for manually downloaded pdfs"; continue; fi
+				# echo -e "\nThis paper is not on the arxiv. \nPlease browse its information and select a file from the PWD \n\npaper's bibtex entry : \n\n$paper\n"
+				# # ask the user to identify this paper from among the files from the manual downloads folder
+				# echo "if this paper is present please select it from within $MANUALDOWNLOADSFOLDER, by typing the number. Cancel this menu by entering '1' or using CTRL-D"
+				# echo ""
+				# slightly_old_IFS=$IFS	# save the field separator           
+				# IFS=$'\n'	# new field separator
+				# select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 $MANUALDOWNLOADSFOLDER/* | grep -v $BIBFILE )") # if manuallyDownloadedPdfs is empty this gives "ls: cannot access manuallyDownloadedPdfs/*: No such file or directory". Meh.
+				# do
+					# if [[ "$fileContainingPaper" =~ "CANCEL THIS MENU" ]]; then break; fi
+					# if [[ ! -f "$fileContainingPaper" ]]; then echo -e "\ninvalid choice\n"; break; fi	
+					# echo -e "\nrename            $fileContainingPaper            to            $paperFilenameSuggestion            ?"
+					# getYN && mv -i $fileContainingPaper $paperFilenameSuggestion && addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"
+					# break # you only get out of a select statement with a break statement
+				# done
+				# IFS=$slightly_old_IFS	# restore default field separator
+			# else # if there is already a file for the pdf
+				# echo "PDF: PRESENT"
+				# addFileField "$paper" "$paperUID" "$paperFilenameSuggestion"  # this can handle case that there is already a file field
+			# fi
+			# 
+		# fi
+		# 
+		# # ------------ ! <\OLD> ! ------------
+		
+		
 	done
 	IFS=$old_IFS	# restore default field separator
 }
