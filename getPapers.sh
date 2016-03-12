@@ -5,20 +5,45 @@ readonly TITLELENGTHLIMIT=100 # to limit the number of characters in a paper's t
 readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the authors' names as they appear in the paper's filename
 
 # TO DO
-# for non-arxiv papers fetch the abstracts from inSPIRE instead - actually forget this because often for old papers inSPIRE doesn't show the abstract either
+# for non-arxiv papers fetch the abstracts from somewhere else. But what web source is there that will reliably have the abstract of any paper I ask for?
 # fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
-# look up what the other bibtex types are (aside from articles) and allow all ones with the same fields/arxiv stuff, etc. The program didn't deal with an "inproceedings" when I asked it to, even though enough of the fields were the same that it could have dealt with it fine.
-# change the behaviour of arxiv pages so that it gets the link to the pdf without saving the page.
-# would like it to edit bibtex/process new bibtex fetched from inSPIRE, such that the newline within a field value are removed!
-# regex needs work - it failed to cope with bibtex that had a 'title' field followed by a 'booktitle' field! - now fixed. But do the other field need similar treatment?
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
         read -p "OK? y/n > " input </dev/tty
         if [[ "$input" == "y" ]]; then return 0; else return 1; fi
 }
+
+fixNewlineUseInBibfile(){
+	local bibfile="$1"
+	# sometimes the bibtex has a field split over two lines, which we dub a "line-broken field", which looks like:
+	#   title = "{The Calabi-Yau string landscape
+	#            heterotic (2,2) integrability catastrophe"
+	# WE NEED TO FIND AND FIX THESE so that they have no line-break, thus: 
+	#   title = "{The Calabi-Yau string landscape heterotic (2,2) integrability catastrophe}"
+	# Currently this only works with two lines, not three or more.
+	# 
+	# input bibtex will have entries that look like this:
+	#  1. a start line e.g.: @article{LOL2016,
+	#  2. field entries and/or line-broken field entries, ending with a comma e.g.: year = "2016",
+	#  3. the last line e.g.: weblink = "www.lol.com"
+	#  4. closebracket matching the start line : }
+	# 
+	# therefore use a FEARSOME sed command to fix this:
+	#  1. find a line that doesn't end with a comma - this pattern characterises these line-broken entries OR the last entry in a bibtex item
+	#  2. after finding such a line, append the next line to the pattern space with the command "N"
+	#  3.      IF the pattern space has a line, and then a newline character, and then a line containing only a }, then we've hit the last line, so THEN do nothing, i.e. move on, with the command "n"
+	#  4. ELSE IF the pattern space has a line, and then a newline character, and then a line containing no equals signs, ending with a comma, then we've found a line-broken field, so THEN delete '\n\s*' in the pattern space to return a non-line-broken field.
+	sed '/\S*[^,]\s*$/ {N
+			/\n}\s*$/ n
+			/^.*\n[^=]*,\s*$/ {
+					s/\n\s*//
+			}
+	}' "$bibfile"
+}
+
 addFileField(){ # edits the bib file
 	local paper="$1"
 	local paperUID="$2"
@@ -189,7 +214,7 @@ main(){
 	
 	old_IFS=$IFS	# save the field separator
 	IFS=@	# the field separator used in bib
-	for paper in $(cat "$BIBFILE")
+	for paper in $(fixNewlineUseInBibfile "$BIBFILE")
 	do
 		# STEP 1 : check if the item is suitable
 		echo "---------------------------------------"
@@ -329,7 +354,7 @@ main(){
 				echo ""
 				slightly_old_IFS=$IFS	# save the field separator           
 				IFS=$'\n'	# new field separator
-				select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 $MANUALDOWNLOADSFOLDER/* | grep -v $BIBFILE )")
+				select fileContainingPaper in $(echo -e '( CANCEL THIS MENU )'"\n""$(ls -1 $MANUALDOWNLOADSFOLDER/* | grep -v $BIBFILE )") # if manuallyDownloadedPdfs is empty this gives "ls: cannot access manuallyDownloadedPdfs/*: No such file or directory". Meh.
 				do
 					if [[ "$fileContainingPaper" =~ "CANCEL THIS MENU" ]]; then break; fi
 					if [[ ! -f "$fileContainingPaper" ]]; then echo -e "\ninvalid choice\n"; break; fi	
