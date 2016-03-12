@@ -1,5 +1,7 @@
 #!/bin/bash
 
+readonly PROGNAME=$(basename $0)
+readonly PROGDIR=$(readlink -m $(dirname $0))
 readonly MANUALDOWNLOADSFOLDER=manuallyDownloadedPdfs
 readonly TITLELENGTHLIMIT=100 # to limit the number of characters in a paper's title as it appears in the paper's filename
 readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the authors' names as they appear in the paper's filename
@@ -9,6 +11,33 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
+
+showHelp(){
+	cat <<- _EOF_
+	$PROGNAME help:
+	
+	This program takes a bibtex file and manages/downloads/renames pdfs in the pwd (present working directory)
+	The end result is that the pwd will contain a pdf of each paper in the bibtex file, with a nice filename.
+	It also updates each paper's bibtex entry (in the bibtex file) with the abstract of the paper and with the location of the pdf.
+	
+	It has a second useful feature - you can pass it a link to an inSPIRE page (with option -a) and it will add that paper to your bibtex, and download and rename the pdf, all in one go.
+	
+	USAGE: 
+	Standard usage:
+	  bash $PROGNAME thesisBibliography.bib
+	This looks at every paper in thesisBibliography.bib in turn.
+	It checks if the paper is present in the pwd - if not it checks if it is on the arxiv and downloads it.
+	It checks if the bibtex has the abstract - if not it gets the abstract from the arxiv (if possible) and adds it to the bibtex entry
+	It checks if the bibtex has the file location - if not it adds a "localfile" field to the bibtex with the file location
+	
+	enhanced inSPIRE usage:
+	  bash $PROGNAME -a https://inspirehep.net/record/1413130 thesisBibliography.bib
+	This gets the bibtex from the paper at the page you linked, and adds it to thesisBibliography.bib
+	Then it proceeds as in the standard usage above.
+	The last entry in the bibtex file is for the paper you linked, so when it reaches the end of the bibtex file it downloads your new paper etc.
+	
+	_EOF_
+}
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
@@ -170,6 +199,7 @@ readOptions(){
 	while getopts ":a:" opt # the first colon suppress getopts' error messages and I substitute my own. The others indicate that an argument is taken.
 	do
 		case $opt in
+		h)	showHelp; exit 0;;
 		a)	LISTOFINSPIREURLS="$LISTOFINSPIREURLS $OPTARG";; # i.e. add the URL to the list of URLs
 		\?)	echo invalid option "$OPTARG"; exit 1;;
 		esac
@@ -177,6 +207,8 @@ readOptions(){
 }
 
 main(){
+	if [[ $@ == *"--help"*  ]]; then showHelp; exit 0; fi
+	
 	LISTOFINSPIREURLS="" # holds the URLs that the user has passed to the program with the -a option
 	
 	readOptions "$@"
