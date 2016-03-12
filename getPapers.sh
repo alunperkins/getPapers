@@ -35,11 +35,11 @@ fixNewlineUseInBibfile(){
 	#  1. find a line that doesn't end with a comma - this pattern characterises these line-broken entries OR the last entry in a bibtex item
 	#  2. after finding such a line, append the next line to the pattern space with the command "N"
 	#  3.      IF the pattern space has a line, and then a newline character, and then a line containing only a }, then we've hit the last line, so THEN do nothing, i.e. move on, with the command "n"
-	#  4. ELSE IF the pattern space has a line, and then a newline character, and then a line containing no equals signs, ending with a comma, then we've found a line-broken field, so THEN delete '\n\s*' in the pattern space to return a non-line-broken field.
+	#  4. ELSE IF the pattern space has a line, and then a newline character, and then a line containing no equals signs, ending with a comma, then we've found a line-broken field, so THEN delete '\n' in the pattern space (while being careful with any whitespace) to return a non-line-broken field
 	sed '/\S*[^,]\s*$/ {N
 			/\n}\s*$/ n
 			/^.*\n[^=]*,\s*$/ {
-					s/\n\s*//
+					s/\s*\n\s*/ /
 			}
 	}' "$bibfile"
 }
