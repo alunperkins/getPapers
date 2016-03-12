@@ -11,6 +11,7 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
+# when adding bibtex from an inSPIRE URL, insert the paper's abstract at that time, instead of trying our luck on the arxiv later.
 
 showHelp(){
 	cat <<- _EOF_
@@ -168,6 +169,7 @@ addBibtexToBibfile(){
 		echo "Error: The bib file already contains an entry with the same identifier as the paper at this inspire url"
 	else
 		echo "$bibtex" >> "$BIBFILE"
+		# need to teach this to add the abstract at this point!
 	fi
 }
 
@@ -196,7 +198,7 @@ getBibtexFromInspirePage(){
 }
 
 readOptions(){
-	while getopts ":a:" opt # the first colon suppress getopts' error messages and I substitute my own. The others indicate that an argument is taken.
+	while getopts ":ha:" opt # the first colon suppress getopts' error messages and I substitute my own. The others indicate that an argument is taken.
 	do
 		case $opt in
 		h)	showHelp; exit 0;;
@@ -226,7 +228,7 @@ main(){
 		echo 
 		echo adding bibtex data from URL $inspireUrl
 		isUrlIsAnInspireUrl $inspireUrl || continue
-		addBibtexToBibfile "$(getBibtexFromInspirePage $inspireUrl)" # >> "$BIBFILE"
+		addBibtexToBibfile "$(getBibtexFromInspirePage $inspireUrl)"
 	done
 	echo "" # a blank line
 	
