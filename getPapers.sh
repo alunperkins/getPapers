@@ -8,7 +8,6 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 
 # TO DO
 # for non-arxiv papers fetch the abstracts from somewhere else. But what web source is there that will reliably have the abstract of any paper I ask for?
-# fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # when adding bibtex from an inSPIRE URL, insert the paper's abstract at that time, instead of trying our luck on the arxiv later.
 # need to write code to handle if there is no doi link in the bibtex
@@ -241,7 +240,8 @@ main(){
 	echo "reading $BIBFILE"
 	
 	echo "FYI a tally chart of fields appearing in the .bib file"
-	grep -o '^[^=]* =' "$BIBFILE" | grep '\S.*' | sort | uniq --count # | sort --numeric-sort
+	# grep -o '^[^=]* =' "$BIBFILE" | grep -o '\S.*' | sort | uniq --count # | sort --numeric-sort
+	grep -o '^[^=]* =' "$BIBFILE" | grep -o '[a-zA-Z]*' | sort | uniq --count --ignore-case
 
 	echo "this program generally only uses the arxiv, but for non-arxiv papers it can still manage file/names and add info to the bibtex."
 	echo "it will look for non-arxiv papers that have been downloaded manually in the folder $MANUALDOWNLOADSFOLDER"
