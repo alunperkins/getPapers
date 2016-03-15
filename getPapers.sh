@@ -11,7 +11,9 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # when adding bibtex from an inSPIRE URL, insert the paper's abstract at that time, instead of trying our luck on the arxiv later.
 # need to write code to handle if there is no doi link in the bibtex
-# in the "read data into variables" section where paperAuthorsSurnames etc are defined, the grep is case insensitive, BUT THE SED IT NOT. FIX IT!
+# output echoes have gone screwy - it keeps saying it's updated the path to the bib file
+# it no longer shows you the bibtex of the paper you're supposed to be selecting from manuallyDownloadedPdfs
+# line 270 where it gets paperUID is hard-coded for articles!!!!! FIX THIS!
 
 showHelp(){
 	cat <<- _EOF_
@@ -260,9 +262,9 @@ main(){
 		
 		# STEP 1 : read the bibtex data into variables
 		# regex in next line is: grep for author field | but delete the author tag itself | find surnames = nonblank characters before a comma | deal with {t'Hooft} | remove newlines
-		local paperAuthorsSurnames="$(echo $paper | grep -io '^\s*author\s*= "[^"]*'  | sed 's/\s*author\s*= "//' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
-		local paperYear="$(echo $paper | grep -io '^\s*year\s*= "[^"]*'  | sed 's/\s*year\s*= "//')"
-		local paperTitle="$(echo $paper | grep -io '^\s*title\s*= "[^"]*'  | sed 's/\s*title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
+		local paperAuthorsSurnames="$(echo $paper | grep -io '^\s*author\s*= "[^"]*'  | sed 's/.*=\s*"\(\S.*\)/\1/' | grep -o '\S*,' | sed 's/.*Hooft.*/tHooft,/' | tr -d '\n' )" # list of names separated by commas e.g. Lu,Perkins,Pope,Stelle,
+		local paperYear="$(echo $paper | grep -io '^\s*year\s*= "[^"]*'  | sed 's/.*=\s*"\(\S.*\)/\1/')"
+		local paperTitle="$(echo $paper | grep -io '^\s*title\s*= "[^"]*'  | sed 's/.*=\s*"\(\S.*\)/\1/' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
 		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
 		local paperUID="$(sed -n -e 's/^article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
