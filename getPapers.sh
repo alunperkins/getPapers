@@ -324,7 +324,10 @@ main(){
 				if [[ -d $MANUALDOWNLOADSFOLDER ]]
 				then
 					echo "...found $MANUALDOWNLOADSFOLDER"
-					echo "Would you like to point out the paper from among the files in $MANUALDOWNLOADSFOLDER?"
+					echo
+					echo "examining the follwing bibtex entry:"
+					echo $paper
+					echo "Can you point out this paper from among the files in $MANUALDOWNLOADSFOLDER?"
 					getYN && selectFileFromManualDownloadsFolder "$paperFilenameSuggestion" "$paperUID" # this also handles moving the paper and calling addFileField
 					local userSelectedFileSucess=$?
 				else
