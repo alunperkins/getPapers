@@ -8,11 +8,8 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 
 # TO DO
 # for non-arxiv papers fetch the abstracts from somewhere else. But what web source is there that will reliably have the abstract of any paper I ask for?
-# fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
-# add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
 # when adding bibtex from an inSPIRE URL, insert the paper's abstract at that time, instead of trying our luck on the arxiv later.
 # need to write code to handle if there is no doi link in the bibtex
-# in the "read data into variables" section where paperAuthorsSurnames etc are defined, the grep is case insensitive, BUT THE SED IT NOT. FIX IT!
 
 showHelp(){
 	cat <<- _EOF_
@@ -80,25 +77,17 @@ fixNewlineUseInBibfile(){
 }
 
 addFileField(){ # edits the bib file
-	# local paper="$1"
-	# local paperUID="$2"
-	# local paperFilename="$3"
 	local paperUID="$1"
 	local paperFilename="$2"
 	
-	# check if there is a "file" field already # OLD
-	# echo $paper| grep -i '^\s*localfile\s*= ' >/dev/null
-	# local paperFileFieldPresent=$?
-	
-	# check if there is a "file" field already # NEW
+	# check if there is a "file" field already
 	# sed to get the bibtex of this paper, then check it for a "localfile" field
-	sed -n '/$paperUID/,/^}\s*$/p' $BIBFILE | grep -i '^\s*localfile\s*= ' >/dev/null
+	sed -n "/$paperUID/,/^}\s*$/p" $BIBFILE | grep -i '^\s*localfile\s*= ' >/dev/null
 	local paperFileFieldPresent=$?
 	
 	if [[ $paperFileFieldPresent -ne true ]]
 	then
 		echo "updating the bib file with (relative) path to pdf"
-		#sed -i "s/^\(\s*\)year = ".*$paperYear[^,]*"/&,\n\1file = ":$paperFilename:pdf"/" $BIBFILE # should work correctly if the UID line has a comma or not === is last or not
 		sed -i "s/$paperUID,/&\n	localfile = \"$paperFilename\",/" $BIBFILE
 	else
 		echo "the bib entry already has a file listed - not updating it with path to the pdf"
@@ -110,12 +99,7 @@ addAbstractField(){ # edits the bib file
 	local paperAbstract="$3"
 	local paperAbstractSanitised=$(printf '%s\n' "$paperAbstract" | tr -d '@"' | sed 's/[\&/|$]/\\&/g') # delete @ and " and escape the special characters \&/ (e.g. from LaTeX) suitably to appear in RHS of a sed command
 	
-	
-	# check if there is an "abstract" field already # OLD
-	# echo $paper| grep -i '^\s*abstract\s*= ' >/dev/null
-	# local paperAbstractFieldPresent=$?
-	
-	# check if there is an "abstract" field already # NEW
+	# check if there is an "abstract" field already
 	# sed to get the bibtex of this paper, then check it for an "abstract" field
 	sed -n '/$paperUID/,/^}\s*$/p' $BIBFILE | grep -i '^\s*abstract\s*= ' >/dev/null
 	local paperAbstractFieldPresent=$?
@@ -264,7 +248,7 @@ main(){
 		local paperYear="$(echo $paper | grep -io '^\s*year\s*= "[^"]*'  | sed 's/\s*year\s*= "//')"
 		local paperTitle="$(echo $paper | grep -io '^\s*title\s*= "[^"]*'  | sed 's/\s*title\s*= "//' | tr -d '{}')" # sometimes the title is saved like {Elongating Equations in Type VII String Conglomerations} so use tr to delete any brackets
 		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
-		local paperUID="$(sed -n -e 's/^article{\([^,]*\),/\1/p' <<< $paper)" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
+		local paperUID="$(head -n 1 <<<$paper | sed 's/^[^{]*{\(.*\),$/\1/')" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
 		if [[ -z "$paperAuthorsSurnames" ]]; 	then echo "couldn't read author's names - please check the bib file"; 		continue; fi
 		if [[ -z "$paperYear" ]]; 		then echo "couldn't read publication year - please check the bib file"; 	continue; fi
@@ -351,8 +335,8 @@ main(){
 				if [[ $userSelectedFileSucess -ne true ]]
 				then
 					echo "...Failed to get file from $MANUALDOWNLOADSFOLDER"
-					echo "If you get hold of the file yourself, put it in $MANUALDOWNLOADSFOLDER so next time you run this program you can select the pdf from the list"
 					echo 
+					echo "You can get hold of the file yourself and put it in $MANUALDOWNLOADSFOLDER for next time the program is run"
 					echo "Open the doi link '$paperDoiLink' in your default browser?"
 					# need to add a check that there was a doi link in the bibtex!
 					getYN && xdg-open "$paperDoiLink"
