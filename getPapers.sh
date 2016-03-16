@@ -45,7 +45,6 @@ showHelp(){
 	
 	_EOF_
 }
->>>>>>> 28c92098650fda67506ee6f34676fa2b5677b01f
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
