@@ -8,11 +8,9 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # for non-arxiv papers fetch the abstracts from inSPIRE instead - actually forget this because often for old papers inSPIRE doesn't show the abstract either
 # fix the "tally chart of fields appearing" thing so it copes with different spacing and capitalisations
 # add feature to list the papers one needs to find oneself - i.e. the non-arxiv papers that are not present
-# add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated
-# look up what the other bibtex types are (aside from articles) and allow all ones with the same fields/arxiv stuff, etc. The program didn't deal with an "inproceedings" when I asked it to, even though enough of the fields were the same that it could have dealt with it fine.
-# change the behaviour of arxiv pages so that it gets the link to the pdf without saving the page.
+# add feature to use inSPIRE to open the URLs of all the papers on needs to find oneself. User will still have to deal with the publishers' CAPCHAs of course, so actually retrieving non-arxiv papers presumably cannot be automated - this can easily be done with the doi field in the bibtex!
 # would like it to edit bibtex/process new bibtex fetched from inSPIRE, such that the newline within a field value are removed!
-# regex needs work - it failed to cope with bibtex that had a 'title' field followed by a 'booktitle' field! - now fixed. But do the other field need similar treatment?
+# DOCUMENTATION needs great improvement!
 
 getYN(){ # for creating simple dialogs e.g. getYN && eraseFile, or e.g. getYN || exit
         local input=""
@@ -322,6 +320,16 @@ main(){
 			if [[ ! -e $paperFilenameSuggestion ]] # if there is no file for the PDF
 			then # then ask the user to point out the pdf
 				echo "PDF: ABSENT OR WRONGLY NAMED"
+				
+				# offer to use the doi data to open the paper's page in your default browser (is xdg-open suitable?)
+				# instruct the user to save it to "manualDownloadsFolder"
+				# this makes the structure: 
+				#   1. ask to open in browser (before seeing contents of manualDownloadsFolder :S) 
+				#   2. does or does not get saved in manualDownloadsFolder
+				#   3. show "select" menu for manualDownloadsFolder
+				#   4. user selects the file and it gets renamed, or cancels the menu.
+				# overall order of preference for finding a paper is: Correctly named pdf in pwd, Arxiv download link, manualDownloadsFolder
+				
 				if [[ ! -d $MANUALDOWNLOADSFOLDER ]]; then echo "could not find the folder for manually downloaded pdfs"; continue; fi
 				echo -e "\nThis paper is not on the arxiv. \nPlease browse its information and select a file from the PWD \n\npaper's bibtex entry : \n\n$paper\n"
 				# ask the user to identify this paper from among the files from the manual downloads folder
