@@ -97,7 +97,7 @@ addAbstractField(){ # edits the bib file
 	# local paper="$1"
 	local paperUID="$1"
 	local paperAbstract="$2"
-	local paperAbstractSanitised=$(printf '%s\n' "$paperAbstract" | tr -d '@"' | sed 's/[\&/|$]/\\&/g') # delete @ and " and escape the special characters \&/ (e.g. from LaTeX) suitably to appear in RHS of a sed command
+	local paperAbstractSanitised="$(printf '%s\n' "$paperAbstract" | tr -d '@"' | sed 's@[\&/|$]@\\&@g')" # delete @ and " and escape the special characters \&/ (e.g. from LaTeX) suitably to appear in RHS of a sed command
 	
 	# check if there is an "abstract" field already
 	# sed to get the bibtex of this paper, then check it for an "abstract" field
@@ -354,7 +354,14 @@ main(){
 		# if there is no abstract in the bibtex, but an abstract is available, then add the abstract if possible
 		if [[ $paperAbstractFieldPresent -ne true && $onArxiv -eq true ]]
 		then
-			addAbstractField "$paperUID" "$paperAbstract"
+			# regex is tr to replace all newlines with spaces (so now the webpage is one big line) | grep for the html code of the abstract | sed to extract the pure abstract text
+			local paperAbstract="$(tr '\n' ' ' <<< $arxivPage | grep -o '<blockquote.*<span.*bstract.*</span>.*</blockquote>' | sed 's@.*/span> \(.*\)</blockquote.*@\1@')"
+			if [[ -z "$paperAbstract" ]]
+			then 
+				echo "couldn't read paper's abstract"
+			else
+				addAbstractField "$paperUID" "$paperAbstract"
+			fi
 		fi
 		
 	done
