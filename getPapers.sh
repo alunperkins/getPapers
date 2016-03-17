@@ -94,9 +94,9 @@ addFileField(){ # edits the bib file
 	fi
 }
 addAbstractField(){ # edits the bib file
-	local paper="$1"
-	local paperUID="$2"
-	local paperAbstract="$3"
+	# local paper="$1"
+	local paperUID="$1"
+	local paperAbstract="$2"
 	local paperAbstractSanitised=$(printf '%s\n' "$paperAbstract" | tr -d '@"' | sed 's/[\&/|$]/\\&/g') # delete @ and " and escape the special characters \&/ (e.g. from LaTeX) suitably to appear in RHS of a sed command
 	
 	# check if there is an "abstract" field already
@@ -107,7 +107,6 @@ addAbstractField(){ # edits the bib file
 	if [[ $paperAbstractFieldPresent -ne true ]]
 	then
 		echo "updating the bib file with the abstract"
-		#sed -i "s@^\(\s*\)year = ".*$paperYear[^,]*"@&,\n\1abstract = "\{$paperAbstractSanitised\}"@" $BIBFILE # should work correctly if the UID line has a comma or not === is last or not
 		sed -i "s/$paperUID,/&\n	abstract = \"$paperAbstractSanitised\",/" $BIBFILE
 	else
 		echo "the bib entry already has an abstract - not updating it with the abstract"
@@ -209,6 +208,7 @@ main(){
 	if [[ ! $# == 1 ]] # if number of arguments isn't exactly 1
 	then
 		echo "provide the name of the .bib file"
+		echo "use $PROGNAME --help for full help text"
 		exit 1
 	fi
 	BIBFILE="$1" # global variable
@@ -225,7 +225,6 @@ main(){
 	echo "reading $BIBFILE"
 	
 	echo "FYI a tally chart of fields appearing in the .bib file"
-	# grep -o '^[^=]* =' "$BIBFILE" | grep -o '\S.*' | sort | uniq --count # | sort --numeric-sort
 	grep -o '^[^=]* =' "$BIBFILE" | grep -o '[a-zA-Z]*' | sort | uniq --count --ignore-case
 
 	echo "this program generally only uses the arxiv, but for non-arxiv papers it can still manage file/names and add info to the bibtex."
@@ -342,7 +341,7 @@ main(){
 					echo 
 					echo "You can get hold of the file yourself and put it in $MANUALDOWNLOADSFOLDER for next time the program is run"
 					echo "Open the doi link '$paperDoiLink' in your default browser?"
-					# need to add a check that there was a doi link in the bibtex!
+					# need to add a check that there was a valid doi link in the bibtex!
 					getYN && xdg-open "$paperDoiLink"
 				# else
 					# there is no "else" here. I don't know what else we can do to get hold of the paper.
@@ -355,7 +354,7 @@ main(){
 		# if there is no abstract in the bibtex, but an abstract is available, then add the abstract if possible
 		if [[ $paperAbstractFieldPresent -ne true && $onArxiv -eq true ]]
 		then
-			addAbstractField "$paper" "$paperUID" "$paperAbstract"
+			addAbstractField "$paperUID" "$paperAbstract"
 		fi
 		
 	done
