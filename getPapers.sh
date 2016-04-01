@@ -10,6 +10,7 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # for non-arxiv papers fetch the abstracts from somewhere else. But what web source is there that will reliably have the abstract of any paper I ask for?
 # when adding bibtex from an inSPIRE URL, insert the paper's abstract at that time, instead of trying our luck on the arxiv later.
 # need to write code to handle if there is no doi link in the bibtex
+# BUG the code to get paperAuthorsSurnames doesn't cope if there is only a SINGLE author!
 
 showHelp(){
 	cat <<- _EOF_
