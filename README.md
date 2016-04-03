@@ -13,10 +13,10 @@ $ bash getPapers.sh -a [inSPIRE link to paper] myPapers.bib
 and it does three things:
 
 1. It adds the bibtex of the linked paper(s) to the bib file
-2. Downloads all the papers in the bib file (unless already present) *
+2. Downloads all the papers in the bib file (unless already present)*.
 3. it adds information to the paper's bibtex entry - the pdf's file path, and if possible the paper's abstract too.
 
- * for papers not on the arxiv, it will instead let you to select the paper from a list of your files and/or opens the doi link in your browser for you, to save you some clicks.
+ (* for papers not on the arxiv, it will instead let you to select the paper from a list of your files and/or opens the doi link in your browser for you, to save you some clicks.)
 
 Details
 =======
