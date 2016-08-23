@@ -251,11 +251,13 @@ main(){
 		local paperTitleSanitised=$(tr -d '{}*$\/()' <<<"$paperTitle") # delete special characters from the title - most of these are actually allowed in filenames but break common bash commands (brackets are actually OK I think?)
 		local paperUID="$(head -n 1 <<<$paper | sed 's/^[^{]*{\(.*\),$/\1/')" # will contain a semicolon, may contain single quote *cough* 't'Hooft *cough*
 		# check the variables - it could always happen that there are weird unanticipated characters in the bib...
-		if [[ -z "$paperAuthorsSurnames" ]]; 	then echo "couldn't read author's names - please check the bib file"; 		continue; fi
-		if [[ -z "$paperYear" ]]; 		then echo "couldn't read publication year - please check the bib file"; 	continue; fi
-		if [[ -z "$paperTitle" ]]; 		then echo "couldn't read paper title - please check the bib file"; 		continue; fi
-		if [[ -z "$paperTitleSanitised" ]]; 	then echo "paper title couldn't be used - please check the bib file"; 		continue; fi
-		if [[ -z "$paperUID" ]]; 		then echo "couldn't read paper's UID - please check the bib file"; 		continue; fi
+		problem="no"
+		if [[ -z "$paperAuthorsSurnames" ]]; 	then problem="yes"; fi
+		if [[ -z "$paperYear" ]]; 		then problem="yes"; fi
+		if [[ -z "$paperTitle" ]]; 		then problem="yes"; fi
+		if [[ -z "$paperTitleSanitised" ]]; 	then problem="yes"; fi
+		if [[ -z "$paperUID" ]]; 		then problem="yes"; fi
+		if [[ "$problem" == "yes" ]]; then echo "please check/edit this entry so that it is readable: "; echo ""; echo $paper; continue; fi
 		
 		# need to write code to handle the event that there is no doi field in the bibtex!
 		local paperDoiLink=http://dx.doi.org/"$(echo $paper | grep -io '^\s*doi\s*= "[^"]*'  | sed 's/\s*[Dd][Oo][Ii]\s*= "//' )"
