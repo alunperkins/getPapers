@@ -11,6 +11,7 @@ readonly AUTHORNAMESLENGTHLIMIT=40 # to limit the number of characters of the au
 # when adding bibtex from an inSPIRE URL, insert the paper's abstract at that time, instead of trying our luck on the arxiv later.
 # need to write code to handle if there is no doi link in the bibtex
 # BUG the code to get paperAuthorsSurnames doesn't cope with some inSPIRE entries, that are not of the format "surname, firstname and surname, firstname" but something else...
+# some foreign names are two words and appear as e.g. "{De Felice}, Antonio and" i.e. with curly brackets. The code does not understand these.
 
 showHelp(){
 	cat <<- _EOF_
